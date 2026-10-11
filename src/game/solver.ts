@@ -20,7 +20,9 @@ export function solve(level: Level, decisionEvery = 6): Decision[] | null {
 
   const dfs = (step: number): boolean => {
     const p = game.player;
-    const key = `${Math.round(p.x * 16)}:${p.y.toFixed(2)}:${Math.round(p.z * 4)}`;
+    // Au 1/16 de case en x et de couloir en z : plus grossier en z, deux passages à 0,2 couloir d'écart
+    // (l'un frôle un pic, l'autre l'évite) se confondaient et le second était écarté à tort.
+    const key = `${Math.round(p.x * 16)}:${p.y.toFixed(2)}:${Math.round(p.z * 16)}`;
     if (failed.has(key)) return false;
     const snap = game.snapshot();
     for (const jump of [false, true]) {

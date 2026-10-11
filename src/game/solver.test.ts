@@ -30,6 +30,19 @@ describe('solve', () => {
     const lvl = parseMap(Array.from({ length: 5 }, () => '....3....'));
     expect(solve(lvl)).toBeNull();
   });
+  it('distingue deux positions latérales proches (pics à contourner sous des poutres)', () => {
+    // Impossible de sauter sous les poutres : il faut passer à gauche des premiers pics, puis à droite des seconds.
+    const lvl = parseMap([
+      '.........T.T.T^T........',
+      '.........T.T.T^T........',
+      '.........T^T.T^T........',
+      '.........T^T.T.T........',
+      '.........T^T.T.T........',
+    ]);
+    const plan = solve(lvl);
+    expect(plan).not.toBeNull();
+    expect(replay(lvl, plan!)).toBe('won');
+  });
   it('espace les décisions d\'au moins `decisionEvery` pas', () => {
     const plan = solve(LEVEL_1, 36)!;
     expect(plan).not.toBeNull();
