@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest';
+import { THEMES, themeById, themeParam } from './themes';
+import { LEVELS } from '../game/levels';
+
+// Luminance relative et contraste WCAG : approximation de la lisibilité avant éclairage.
+const lum = (c: number): number => {
+  const [r, g, b] = [(c >> 16) & 255, (c >> 8) & 255, c & 255].map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const contrast = (a: number, b: number): number => {
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+describe('THEMES', () => {
+  it('propose 5 décors aux identifiants et aux noms uniques', () => {
+    expect(THEMES).toHaveLength(5);
+    expect(new Set(THEMES.map((t) => t.id)).size).toBe(5);
+    expect(new Set(THEMES.map((t) => t.name)).size).toBe(5);
+  });
+
+  it('chaque niveau référence un décor existant', () => {
+    for (const l of LEVELS) expect(themeById(l.theme).id).toBe(l.theme);
+  });
+
+  it('?theme= choisit un décor pour tous les niveaux (aperçu), ignoré s\'il est inconnu', () => {
+    expect(themeParam('?theme=glacier')).toBe('glacier');
+    expect(themeParam('?x=1&theme=volcan')).toBe('volcan');
+    expect(themeParam('?theme=inconnu')).toBeNull();
+    expect(themeParam('')).toBeNull();
+  });
+
+  THEMES.forEach((t) => {
+    it(`${t.name} : brouillard avant le plan lointain de la caméra (200)`, () => {
+      expect(t.fog.near).toBeGreaterThan(0);
+      expect(t.fog.far).toBeGreaterThan(t.fog.near);
+      expect(t.fog.far).toBeLessThanOrEqual(150);
+    });
+    it(`${t.name} : les pics se détachent de la piste (contraste ≥ 2)`, () => {
+      expect(contrast(t.spike.color, t.track.color)).toBeGreaterThanOrEqual(2);
+    });
+    it(`${t.name} : les blocs se détachent de la piste (contraste ≥ 1,5)`, () => {
+      expect(contrast(t.block.color, t.track.color)).toBeGreaterThanOrEqual(1.5);
+    });
+    it(`${t.name} : le cube se détache de la piste (contraste ≥ 2)`, () => {
+      expect(contrast(t.player.color, t.track.color)).toBeGreaterThanOrEqual(2);
+    });
+  });
+});

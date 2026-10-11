@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import type { Game } from '../game/game';
 import { TRACK_HALF } from '../game/level';
 import { rollPose, type RollPose } from '../game/roll';
+import { Decor } from './decor';
+import type { Theme } from './themes';
 
 const PIECES = 12;
 
-/** Scène Three.js : un mesh joueur, 2 InstancedMesh pour tout le niveau, ~5 draw calls. */
+/** Scène Three.js : un mesh joueur, 2 InstancedMesh pour tout le niveau, et le décor du thème (≤ 5 draw calls). */
 export class GameScene {
   readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -15,34 +17,31 @@ export class GameScene {
   private readonly pieceVel = new Float32Array(PIECES * 3);
   private readonly piecePos = new Float32Array(PIECES * 3);
   private readonly tmp = new THREE.Object3D();
-  private readonly bg = new THREE.Color();
+  private readonly decor: Decor;
   private readonly pose: RollPose = { cx: 0, cy: 0, angle: 0 };
   private deathT = -1;
 
-  constructor(canvas: HTMLCanvasElement, private readonly game: Game) {
+  constructor(canvas: HTMLCanvasElement, private readonly game: Game, theme: Theme) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.scene.fog = new THREE.Fog(0x0b0820, 40, 90);
+    this.renderer.setClearColor(theme.sky.horizon);
+    this.scene.fog = new THREE.Fog(theme.sky.horizon, theme.fog.near, theme.fog.far);
 
-    this.scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x220033, 1.2));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    this.scene.add(new THREE.HemisphereLight(theme.hemi.sky, theme.hemi.ground, theme.hemi.intensity));
+    const sun = new THREE.DirectionalLight(theme.light.color, theme.light.intensity);
     sun.position.set(-4, 10, 8);
     this.scene.add(sun);
 
-    // Sol : un plan large (hors piste), la piste, ses couloirs et ses rails. 4 draw calls au total.
+    // Décor du thème : ciel, montagnes, sol, objets du bord de piste, particules.
+    this.decor = new Decor(theme);
+    this.scene.add(this.decor.object);
+
+    // La piste, ses couloirs et ses rails. 3 draw calls au total.
     const len = game.level.length + 80;
     const x0 = -20, x1 = len - 20, cx = len / 2 - 20;
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(len, 40),
-      new THREE.MeshStandardMaterial({ color: 0x120c30, roughness: 0.9 }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set(cx, 0, 0);
-    this.scene.add(ground);
-
     const track = new THREE.Mesh(
       new THREE.PlaneGeometry(len, TRACK_HALF * 2),
-      new THREE.MeshBasicMaterial({ color: 0x241567 }),
+      new THREE.MeshBasicMaterial({ color: theme.track.color }),
     );
     track.rotation.x = -Math.PI / 2;
     track.position.set(cx, 0.01, 0); // un peu au-dessus du sol pour éviter le z-fighting en vue rasante
@@ -54,14 +53,14 @@ export class GameScene {
     for (let gz = -TRACK_HALF + 1; gz < TRACK_HALF; gz += 1) pts.push(x0, 0, gz, x1, 0, gz);
     const gridGeo = new THREE.BufferGeometry();
     gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0x4a2fd0 }));
+    const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: theme.track.lanes }));
     grid.position.y = 0.02;
     this.scene.add(grid);
 
     const railGeo = new THREE.BufferGeometry();
     railGeo.setAttribute('position', new THREE.Float32BufferAttribute(
       [x0, 0, -TRACK_HALF, x1, 0, -TRACK_HALF, x0, 0, TRACK_HALF, x1, 0, TRACK_HALF], 3));
-    const rails = new THREE.LineSegments(railGeo, new THREE.LineBasicMaterial({ color: 0x33ddff }));
+    const rails = new THREE.LineSegments(railGeo, new THREE.LineBasicMaterial({ color: theme.track.rails }));
     rails.position.y = 0.03;
     this.scene.add(rails);
 
@@ -69,9 +68,9 @@ export class GameScene {
     const pGeo = new THREE.BoxGeometry(1, 1, 1);
     this.player = new THREE.Mesh(
       pGeo,
-      new THREE.MeshStandardMaterial({ color: 0x33ddff, emissive: 0x0a6a88, roughness: 0.35 }),
+      new THREE.MeshStandardMaterial({ color: theme.player.color, emissive: theme.player.emissive, roughness: 0.35 }),
     );
-    this.player.add(new THREE.LineSegments(new THREE.EdgesGeometry(pGeo), new THREE.LineBasicMaterial({ color: 0xffffff })));
+    this.player.add(new THREE.LineSegments(new THREE.EdgesGeometry(pGeo), new THREE.LineBasicMaterial({ color: theme.player.edges })));
     this.scene.add(this.player);
 
     // Obstacles instanciés.
@@ -80,7 +79,9 @@ export class GameScene {
     const spikes = obs.filter((o) => o.kind === 'spike');
     const blockMesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ color: 0x6a4cff, emissive: 0x4a2fd0, emissiveIntensity: 0.6, roughness: 0.4 }),
+      new THREE.MeshStandardMaterial({
+        color: theme.block.color, emissive: theme.block.emissive, emissiveIntensity: theme.block.glow, roughness: 0.4,
+      }),
       blocks.length,
     );
     blocks.forEach((b, i) => {
@@ -94,7 +95,9 @@ export class GameScene {
     spikeGeo.rotateY(Math.PI / 4);
     const spikeMesh = new THREE.InstancedMesh(
       spikeGeo,
-      new THREE.MeshStandardMaterial({ color: 0xff3d7f, emissive: 0xff1a5e, emissiveIntensity: 0.8, roughness: 0.4 }),
+      new THREE.MeshStandardMaterial({
+        color: theme.spike.color, emissive: theme.spike.emissive, emissiveIntensity: theme.spike.glow, roughness: 0.4,
+      }),
       spikes.length,
     );
     spikes.forEach((s, i) => {
@@ -115,13 +118,13 @@ export class GameScene {
     });
     const edgeGeo = new THREE.BufferGeometry();
     edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePts, 3));
-    const blockEdges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0xd8ccff }));
+    const blockEdges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: theme.block.edges }));
     this.scene.add(blockMesh, spikeMesh, blockEdges);
 
     // Ligne d'arrivée.
     const finish = new THREE.Mesh(
       new THREE.PlaneGeometry(TRACK_HALF * 2, 8),
-      new THREE.MeshBasicMaterial({ color: 0x66ff99, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: theme.finish, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
     );
     finish.rotation.y = -Math.PI / 2; // face à la caméra
     finish.position.set(game.level.length, 4, 0);
@@ -130,7 +133,7 @@ export class GameScene {
     // Débris d'explosion (pré-alloués).
     this.pieces = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.25, 0.25, 0.25),
-      new THREE.MeshBasicMaterial({ color: 0x33ddff }),
+      new THREE.MeshBasicMaterial({ color: theme.player.color }),
       PIECES,
     );
     this.pieces.visible = false;
@@ -159,6 +162,7 @@ export class GameScene {
     // En portrait, on recule la caméra pour voir assez loin devant.
     this.camera.fov = w < h ? 70 : 50;
     this.camera.updateProjectionMatrix();
+    this.decor.setViewport(h * this.renderer.getPixelRatio(), this.camera.fov, this.renderer.getPixelRatio());
   }
 
   explode(): void {
@@ -220,11 +224,7 @@ export class GameScene {
     cam.position.z += (z * 0.85 - cam.position.z) * Math.min(1, dt * 8);
     cam.lookAt(x + 12, cam.position.y - 3.6, cam.position.z);
 
-    // Fond qui pulse lentement.
-    this.bg.setHSL(0.7 + Math.sin(time * 0.15) * 0.06, 0.7, 0.015);
-    this.renderer.setClearColor(this.bg);
-    (this.scene.fog as THREE.Fog).color.copy(this.bg);
-
+    this.decor.update(cam.position, time);
     this.renderer.render(this.scene, cam);
   }
 }

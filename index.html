@@ -7,7 +7,7 @@
   <style>
     html, body { margin: 0; height: 100%; background: #0b0820; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
     canvas { display: block; width: 100vw; height: 100vh; }
-    #hud { position: fixed; inset: 0; pointer-events: none; font: 600 14px/1.3 system-ui, sans-serif; color: #fff; }
+    #hud { position: fixed; inset: 0; pointer-events: none; font: 600 14px/1.3 system-ui, sans-serif; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.55); }
     #bar { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(60vw, 420px); height: 8px; border-radius: 4px; background: rgba(255,255,255,.18); overflow: hidden; }
     #fill { height: 100%; width: 0; background: linear-gradient(90deg, #39f, #f3c); transform-origin: left; }
     #pct { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 14px); left: 50%; transform: translateX(-50%); opacity: .85; }
@@ -25,6 +25,10 @@
     #menu button { width: min(86vw, 360px); display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-radius: 14px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); color: #fff; font: 600 17px system-ui, sans-serif; }
     #menu button:disabled { opacity: .35; border-color: rgba(255,255,255,.2); }
     #menu button small { opacity: .8; font-weight: 500; }
+    #menu button em { display: block; font: 500 12px system-ui, sans-serif; opacity: .65; text-align: left; }
+    #decorpick { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-weight: 500; opacity: .9; }
+    #decor { font: 600 15px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); color: #fff; }
+    #decor option { color: #000; }
     #menu button.done { border-color: #66ff99; }
     #menubtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 16px; pointer-events: auto; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
     #msg small { display: block; font-size: 15px; opacity: .8; margin-top: 6px; }
@@ -44,6 +48,7 @@
       <h1>Geomethree</h1>
       <p>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter.<br>Ordinateur : flèches ← → et Espace</p>
       <div id="levels" style="display:contents"></div>
+      <label id="decorpick">Décor <select id="decor"></select></label>
     </div>
   </div>
   <script type="module" src="/src/main.ts"></script>

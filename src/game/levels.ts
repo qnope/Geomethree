@@ -1,4 +1,5 @@
 import { LANES, parseMap, type Level } from './level';
+import type { ThemeId } from '../render/themes';
 
 type Segment = string[]; // 5 lignes de même largeur : couloir gauche → droit, colonnes vers l'avant
 
@@ -73,20 +74,23 @@ const trim = (s: Segment): Segment => {
 const sequence = (gap: number, ...list: Segment[]): Level =>
   parseMap(join(empty(14), ...list.flatMap((c) => [empty(gap), trim(c)]), empty(14)));
 
-export interface LevelDef { name: string; level: Level }
+/** `theme` : décor du niveau (cf. render/themes.ts), interchangeable sans toucher aux obstacles. */
+export interface LevelDef { name: string; theme: ThemeId; level: Level }
 
 // Le temps libre entre deux défis est le « temps de réaction » : 10 s au niveau 1, 2,5 s au dernier
 // (cf. reaction.ts). À 7 u/s : 70, 57, 44, 31 et 18 colonnes (arrondies au-dessus de la cible).
 export const LEVELS: readonly LevelDef[] = [
-  { name: 'Échauffement', level: sequence(70, spike, spikes3, wall(3), wall(0), spikeLine) },
-  { name: 'Slalom', level: sequence(57, wall(2), wall(0), platform, spikeLine, wall(3), spikes3) },
-  { name: 'Prototype', level: sequence(44, spike, wall(3), wall(0), wall(2), platform, spikeLine, tunnel, wall(1)) },
+  { name: 'Échauffement', theme: 'neon', level: sequence(70, spike, spikes3, wall(3), wall(0), spikeLine) },
+  { name: 'Slalom', theme: 'foret', level: sequence(57, wall(2), wall(0), platform, spikeLine, wall(3), spikes3) },
+  { name: 'Prototype', theme: 'dunes', level: sequence(44, spike, wall(3), wall(0), wall(2), platform, spikeLine, tunnel, wall(1)) },
   {
     name: 'Escalade',
+    theme: 'glacier',
     level: sequence(31, stairs, wall(1), wall(3), platform, tunnel, spikeLine, stairs, wall(0), wall(2), tunnel),
   },
   {
     name: 'Marathon',
+    theme: 'volcan',
     level: sequence(
       18, wall(0), wall(3), wall(1), stairs, tunnel, platform, wall(3), wall(0), spikeLine, stairs,
       wall(2), tunnel, platform, wall(0), wall(3), stairs, spikeLine, wall(1), tunnel, wall(2),
