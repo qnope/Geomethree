@@ -32,8 +32,14 @@ export function reactionTime(level: Level): number {
   return min;
 }
 
-/** Temps de réaction visé pour le niveau `i` sur `count` : 10 s pour le premier, 2,5 s pour le dernier, linéaire entre les deux. */
-export function reactionTarget(i: number, count: number): number {
-  if (count <= 1) return REACTION_FIRST;
-  return REACTION_FIRST + ((REACTION_LAST - REACTION_FIRST) * i) / (count - 1);
+export const REACTION_HARD_FIRST = 2.2; // s, niveau 6
+export const REACTION_HARD_LAST = 1;    // s, niveau 10
+
+/**
+ * Temps de réaction visé pour le niveau `i` (0 = niveau 1) : de 10 s à 2,5 s sur les niveaux 1 à 5,
+ * puis de 2,2 s à 1 s sur les niveaux 6 à 10, linéaire dans chaque série.
+ */
+export function reactionTarget(i: number): number {
+  if (i <= 4) return REACTION_FIRST + ((REACTION_LAST - REACTION_FIRST) * i) / 4;
+  return REACTION_HARD_FIRST + ((REACTION_HARD_LAST - REACTION_HARD_FIRST) * (i - 5)) / 4;
 }

@@ -30,4 +30,9 @@ describe('solve', () => {
     const lvl = parseMap(Array.from({ length: 5 }, () => '....3....'));
     expect(solve(lvl)).toBeNull();
   });
+  it('espace les décisions d\'au moins `decisionEvery` pas', () => {
+    const plan = solve(LEVEL_1, 36)!;
+    expect(plan).not.toBeNull();
+    for (let i = 1; i < plan.length; i++) expect(plan[i].step - plan[i - 1].step).toBeGreaterThanOrEqual(36);
+  });
 });

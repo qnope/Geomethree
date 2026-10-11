@@ -20,6 +20,8 @@ export function loadProgress(storage: StorageLike, levels: number): Progress {
     if (typeof d.unlocked !== 'number' || !Array.isArray(d.best)) return p;
     p.best = p.best.map((_, i) => clamp01(d.best && (d.best as unknown[])[i]));
     p.unlocked = Math.max(0, Math.min(levels - 1, Math.floor(d.unlocked)));
+    // Des niveaux ont été ajoutés après le dernier niveau terminé : le suivant s'ouvre.
+    if (p.best[p.unlocked] === 1 && p.unlocked + 1 < levels) p.unlocked++;
     return p;
   } catch {
     return emptyProgress(levels);
