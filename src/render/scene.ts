@@ -3,11 +3,12 @@ import type { Game } from '../game/game';
 import { TRACK_HALF } from '../game/level';
 import { rollPose, type RollPose } from '../game/roll';
 import { Decor } from './decor';
+import { buildObstacles } from './obstacles';
 import type { Theme } from './themes';
 
 const PIECES = 12;
 
-/** Scène Three.js : un mesh joueur, 2 InstancedMesh pour tout le niveau, et le décor du thème (≤ 5 draw calls). */
+/** Scène Three.js : un mesh joueur, un InstancedMesh par type d'obstacle et leurs arêtes, et le décor du thème (≤ 5 draw calls). */
 export class GameScene {
   readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
@@ -73,53 +74,8 @@ export class GameScene {
     this.player.add(new THREE.LineSegments(new THREE.EdgesGeometry(pGeo), new THREE.LineBasicMaterial({ color: theme.player.edges })));
     this.scene.add(this.player);
 
-    // Obstacles instanciés.
-    const obs = game.level.obstacles;
-    const blocks = obs.filter((o) => o.kind === 'block');
-    const spikes = obs.filter((o) => o.kind === 'spike');
-    const blockMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({
-        color: theme.block.color, emissive: theme.block.emissive, emissiveIntensity: theme.block.glow, roughness: 0.4,
-      }),
-      blocks.length,
-    );
-    blocks.forEach((b, i) => {
-      this.tmp.position.set(b.x + 0.5, b.y + b.h / 2, (b.z0 + b.z1) / 2);
-      this.tmp.scale.set(1, b.h, b.z1 - b.z0);
-      this.tmp.updateMatrix();
-      blockMesh.setMatrixAt(i, this.tmp.matrix);
-    });
-    this.tmp.scale.set(1, 1, 1);
-    const spikeGeo = new THREE.ConeGeometry(0.5, 1, 4);
-    spikeGeo.rotateY(Math.PI / 4);
-    const spikeMesh = new THREE.InstancedMesh(
-      spikeGeo,
-      new THREE.MeshStandardMaterial({
-        color: theme.spike.color, emissive: theme.spike.emissive, emissiveIntensity: theme.spike.glow, roughness: 0.4,
-      }),
-      spikes.length,
-    );
-    spikes.forEach((s, i) => {
-      this.tmp.position.set(s.x + 0.5, s.y + 0.5, (s.z0 + s.z1) / 2);
-      this.tmp.updateMatrix();
-      spikeMesh.setMatrixAt(i, this.tmp.matrix);
-    });
-    // Contours blancs de tous les blocs fusionnés en une seule géométrie : 1 draw call.
-    const edge = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.002, 1.002, 1.002)).getAttribute('position');
-    const edgePts = new Float32Array(edge.count * 3 * blocks.length);
-    blocks.forEach((b, i) => {
-      for (let v = 0; v < edge.count; v++) {
-        const k = (i * edge.count + v) * 3;
-        edgePts[k] = edge.getX(v) + b.x + 0.5;
-        edgePts[k + 1] = edge.getY(v) * b.h + b.y + b.h / 2;
-        edgePts[k + 2] = edge.getZ(v) * (b.z1 - b.z0) + (b.z0 + b.z1) / 2;
-      }
-    });
-    const edgeGeo = new THREE.BufferGeometry();
-    edgeGeo.setAttribute('position', new THREE.BufferAttribute(edgePts, 3));
-    const blockEdges = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: theme.block.edges }));
-    this.scene.add(blockMesh, spikeMesh, blockEdges);
+    // Obstacles : un maillage instancié par type présent, habillé par le décor, plus leurs arêtes.
+    this.scene.add(buildObstacles(game.level, theme));
 
     // Ligne d'arrivée.
     const finish = new THREE.Mesh(
