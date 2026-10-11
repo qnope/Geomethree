@@ -10,14 +10,30 @@ export const CONFIG = {
   speed: 7,           // unités / s
   gravity: 80 * 0.49,
   jumpVelocity: 20 * 0.7, // hauteur max = v² / 2g = 2.5
+  padVelocity: 20 * 0.7 * Math.SQRT2, // tremplin : hauteur max 5, de quoi passer un mur (3)
+  moverSpeed: 2.5,    // couloirs / s, vitesse latérale des mobiles
   size: 1,
   landTolerance: 0.05,
   lateralSpeed: 8,    // unités / s à pleine inclinaison
   maxZ: TRACK_HALF - 0.5, // centre du cube : la piste fait ±2,5 et le cube 1 de large
 } as const;
 
-// Hitbox réduite des pics, comme dans Geometry Dash, pour un jeu plus juste.
+// Hitbox réduite des pics et des mobiles, comme dans Geometry Dash, pour un jeu plus juste.
 const SPIKE_BOX = { dx: 0.35, w: 0.3, h: 0.55, dz: 0.2 };
+const MOVER_BOX = { dx: 0.15, w: 0.7, h: 0.75, dz: 0.15 };
+
+/**
+ * Bord gauche (z) de la case d'un mobile quand le cube est en `px` : il va et vient sur son rail à
+ * `moverSpeed` couloirs par seconde, et part de `start` (vers la droite) quand le cube arrive à sa colonne.
+ * Le cube avance à vitesse constante : sa position vaut une horloge, et la partie reste déterministe.
+ */
+export function moverZ(o: Obstacle, px: number): number {
+  const span = o.z1 - o.z0 - 1; // course, en couloirs
+  if (span <= 0) return o.z0;
+  const u = (o.start ?? o.z0) - o.z0 + ((px - o.x) * CONFIG.moverSpeed) / CONFIG.speed;
+  const m = ((u % (2 * span)) + 2 * span) % (2 * span); // aller (0 → span) puis retour
+  return o.z0 + (m <= span ? m : 2 * span - m);
+}
 
 export type Status = 'running' | 'dead' | 'won';
 
@@ -107,14 +123,22 @@ export class Game {
 
     const pb = this.pBox;
     pb.x = p.x; pb.y = p.y; pb.z = p.z - size / 2;
+    const cx = p.x + size / 2; // centre du cube au sol : fosses et tremplins ne regardent que lui
     for (let i = this.cursor; i < obs.length; i++) {
       const o = obs[i];
       if (o.x >= p.x + size) break; // trié par x : rien plus loin ne peut toucher
       const ob = this.oBox;
-      if (o.kind === 'spike') {
-        ob.x = o.x + SPIKE_BOX.dx; ob.y = o.y; ob.z = o.z0 + SPIKE_BOX.dz;
-        ob.w = SPIKE_BOX.w; ob.h = SPIKE_BOX.h; ob.d = o.z1 - o.z0 - 2 * SPIKE_BOX.dz;
+      if (o.kind === 'spike' || o.kind === 'mover') {
+        // Hitbox réduite ; celle du mobile suit sa case sur le rail.
+        const spike = o.kind === 'spike', box = spike ? SPIKE_BOX : MOVER_BOX;
+        const z0 = spike ? o.z0 : moverZ(o, p.x), d = spike ? o.z1 - o.z0 : 1;
+        ob.x = o.x + box.dx; ob.y = o.y; ob.z = z0 + box.dz;
+        ob.w = box.w; ob.h = box.h; ob.d = d - 2 * box.dz;
         if (overlaps(pb, ob)) return this.die();
+      } else if (o.kind === 'pit' || o.kind === 'pad') {
+        if (p.y >= o.y + o.h || cx < o.x || cx >= o.x + 1 || p.z < o.z0 || p.z >= o.z1) continue;
+        if (o.kind === 'pit') return this.die();
+        if (p.vy <= 0) { p.vy = CONFIG.padVelocity; p.grounded = false; this.jumps++; }
       } else {
         this.blockBox(o);
         if (!overlaps(pb, ob)) continue;

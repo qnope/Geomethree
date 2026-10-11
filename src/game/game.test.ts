@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Game, CONFIG } from './game';
+import { Game, CONFIG, moverZ } from './game';
 import { parseLevel, parseMap } from './level';
 
 const flat = parseLevel(['                                        ']);
@@ -267,5 +267,171 @@ describe('Game, déplacement latéral', () => {
     run2(g, 0.3, -1);
     g.restore(s);
     expect(g.player.z).toBeCloseTo(CONFIG.lateralSpeed * 0.1, 1);
+  });
+});
+
+// Nouveaux types : fosse (_), poutre (T), tremplin (*), mobile (o sur son rail ~).
+const at = (idx: number, row: string, width = 40) =>
+  Array.from({ length: 5 }, (_, i) => (i === idx ? row.padEnd(width, '.') : '.'.repeat(width)));
+/** Avance sans sauter jusqu'à ce que le cube soit en `x`, puis saute. */
+const jumpAt = (g: Game, x: number, steer = 0) => {
+  while (g.player.x < x && g.status === 'running') g.step(false, steer);
+  g.step(true, steer);
+};
+const runUntil = (g: Game, x: number, steer = 0) => {
+  while (g.player.x < x && g.status === 'running') g.step(false, steer);
+};
+
+describe('Game, fosse', () => {
+  it('le cube qui roule dans une fosse tombe et meurt', () => {
+    const g = new Game(parseMap(at(2, '........_')));
+    runUntil(g, 12);
+    expect(g.status).toBe('dead');
+    expect(g.player.x).toBeGreaterThan(7.5); // dès que son centre est au-dessus de la fosse
+    expect(g.player.x).toBeLessThan(8.5);
+  });
+
+  it('une fosse dans le couloir voisin ne tue pas', () => {
+    const g = new Game(parseMap(at(1, '........___')));
+    runUntil(g, 20);
+    expect(g.status).toBe('running');
+  });
+
+  it('on franchit une fosse de 3 cases en sautant', () => {
+    const g = new Game(parseMap(at(2, '........___')));
+    jumpAt(g, 6.5);
+    runUntil(g, 20);
+    expect(g.status).toBe('running');
+  });
+
+  it('retomber dans une fosse tue', () => {
+    const g = new Game(parseMap(at(2, '........___')));
+    jumpAt(g, 4.5); // saut de 5 cases : retombe vers x = 9,5, au milieu de la fosse
+    runUntil(g, 20);
+    expect(g.status).toBe('dead');
+  });
+});
+
+describe('Game, poutre', () => {
+  it('on passe sous une poutre sans sauter', () => {
+    const g = new Game(parseMap(at(2, '........TTT')));
+    runUntil(g, 20);
+    expect(g.status).toBe('running');
+  });
+
+  it('sauter sous une poutre tue', () => {
+    const g = new Game(parseMap(at(2, '........TTT')));
+    jumpAt(g, 6);
+    runUntil(g, 20);
+    expect(g.status).toBe('dead');
+  });
+
+  it('on ne peut pas atterrir dessus : elle est plus haute que le saut', () => {
+    const lvl = parseMap(at(2, '........TTTTTTTTTT'));
+    let landed = 0;
+    for (let x = 0; x < 8; x += 0.05) {
+      const g = new Game(lvl);
+      jumpAt(g, x);
+      while (g.player.x < 22 && g.status === 'running') {
+        g.step(false);
+        if (g.player.grounded && g.player.y > 0) landed++;
+      }
+    }
+    expect(landed).toBe(0);
+  });
+
+  it('ne gêne pas le déplacement latéral au sol', () => {
+    const g = new Game(parseMap(at(3, '..TTTTTTTTTTTTTTTTTTTT')));
+    runUntil(g, 3, 0);
+    runUntil(g, 15, 1);
+    expect(g.status).toBe('running');
+    expect(g.player.z).toBeCloseTo(CONFIG.maxZ, 5);
+  });
+});
+
+describe('Game, tremplin', () => {
+  it('propulse plus haut qu\'un saut, assez pour passer un mur', () => {
+    const g = new Game(parseMap(at(2, '........*')));
+    let maxY = 0;
+    while (g.player.x < 20) { g.step(false); maxY = Math.max(maxY, g.player.y); }
+    expect(maxY).toBeGreaterThan(4);
+    expect(maxY).toBeLessThan(6);
+    expect(g.jumps).toBe(1); // compte comme un décollage (son du saut)
+  });
+
+  it('passe par-dessus un mur sans passage', () => {
+    const map = Array.from({ length: 5 }, (_, i) => (i === 2 ? '........*..M' : '...........M').padEnd(30, '.'));
+    const g = new Game(parseMap(map));
+    runUntil(g, 25);
+    expect(g.status).toBe('running');
+    const sans = new Game(parseMap(map.map((r) => r.replace('*', '.'))));
+    runUntil(sans, 25);
+    expect(sans.status).toBe('dead');
+  });
+
+  it('ne fait rien au cube qui le survole', () => {
+    const g = new Game(parseMap(at(2, '........*')));
+    jumpAt(g, 6);
+    runUntil(g, 20);
+    expect(g.jumps).toBe(1);
+  });
+
+  it('dans le couloir voisin, il ne propulse pas', () => {
+    const g = new Game(parseMap(at(1, '........*')));
+    runUntil(g, 20);
+    expect(g.jumps).toBe(0);
+  });
+});
+
+describe('Game, mobile', () => {
+  const rail = (x: number, lanes: string) => // `lanes` : 5 caractères, couloir gauche → droit
+    Array.from({ length: 5 }, (_, i) => ('.'.repeat(x) + lanes[i]).padEnd(40, '.'));
+
+  it('moverZ : part de sa case o quand le cube arrive à sa colonne', () => {
+    const lvl = parseMap(rail(10, '~o~~~'));
+    expect(moverZ(lvl.obstacles[0], 10)).toBeCloseTo(-1.5, 9);
+  });
+
+  it('moverZ : avance de moverSpeed couloirs par seconde, vers la droite d\'abord', () => {
+    const o = parseMap(rail(10, '~o~~~')).obstacles[0];
+    const dt = 0.2;
+    expect(moverZ(o, 10 + CONFIG.speed * dt)).toBeCloseTo(-1.5 + CONFIG.moverSpeed * dt, 9);
+  });
+
+  it('moverZ : fait l\'aller-retour sans jamais sortir de son rail', () => {
+    const o = parseMap(rail(10, '.~o~.')).obstacles[0];
+    let min = Infinity, max = -Infinity;
+    for (let x = -50; x < 200; x += 0.01) {
+      const z = moverZ(o, x);
+      min = Math.min(min, z); max = Math.max(max, z);
+    }
+    expect(min).toBeCloseTo(o.z0, 2);
+    expect(max).toBeCloseTo(o.z1 - 1, 2);
+  });
+
+  it('moverZ : sans rail, le mobile reste sur sa case', () => {
+    const o = parseMap(rail(10, '..o..')).obstacles[0];
+    for (const x of [0, 5, 10, 13.3]) expect(moverZ(o, x)).toBe(-0.5);
+  });
+
+  it('tue le cube qui le rencontre', () => {
+    const g = new Game(parseMap(rail(10, '..o..'))); // immobile, au centre
+    runUntil(g, 15);
+    expect(g.status).toBe('dead');
+  });
+
+  it('on le saute comme une pyramide', () => {
+    const g = new Game(parseMap(rail(10, '..o..')));
+    jumpAt(g, 8);
+    runUntil(g, 20);
+    expect(g.status).toBe('running');
+  });
+
+  it('touche le cube au centre s\'il y passe au bon moment, l\'épargne sinon', () => {
+    // Le cube reste au centre (z = 0). Le mobile part de la gauche : il est au centre quand le cube
+    // l'atteint si son rail commence assez tôt, et ailleurs sinon.
+    const outcome = (start: string) => { const g = new Game(parseMap(rail(10, start))); runUntil(g, 20); return g.status; };
+    expect(outcome('~~o~~')).toBe('dead');
+    expect(outcome('o~~~~')).toBe('running'); // en x = 10, il est encore à gauche
   });
 });
