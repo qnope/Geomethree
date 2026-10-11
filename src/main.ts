@@ -6,11 +6,14 @@ import { THEMES, themeById, themeParam, type ThemeId } from './render/themes';
 import { FrameStats } from './perf';
 import { Controls } from './input';
 import { loadProgress, saveProgress, recordRun, isUnlocked } from './progress';
+import { Sound } from './audio/sound';
+import { workerRenderer } from './audio/renderer';
 
 const $ = (id: string) => document.getElementById(id)!;
 const fill = $('fill'), pct = $('pct'), att = $('att'), perf = $('perf'), msg = $('msg');
 const dot = $('dot'), btnL = $('bl'), btnR = $('br'), menu = $('menu'), levelList = $('levels'), menuBtn = $('menubtn');
 const decorPick = $('decor') as HTMLSelectElement;
+const soundBtn = $('sndbtn');
 
 const storage = (() => { try { return window.localStorage; } catch { return null; } })();
 const progress = storage ? loadProgress(storage, LEVELS.length) : loadProgress({ getItem: () => null, setItem: () => {} }, LEVELS.length);
@@ -21,6 +24,11 @@ let game: Game;
 let view: GameScene;
 let current = 0;
 const stats = new FrameStats(120);
+const sound = new Sound({
+  createContext: () => new (window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)(),
+  render: workerRenderer(),
+  storage,
+});
 const controls = new Controls();
 controls.attach();
 
@@ -39,6 +47,7 @@ function loadLevel(i: number) {
   document.body.prepend(canvas);
   game = new Game(LEVELS[i].level);
   view = new GameScene(canvas, game, themeById(forcedTheme ?? LEVELS[i].theme));
+  sound.setTheme(forcedTheme ?? LEVELS[i].theme);
   endT = 0;
   lastPct = -1;
   msg.style.display = 'none';
@@ -87,6 +96,19 @@ decorPick.addEventListener('change', () => {
   renderMenu();
 });
 
+// iOS n'autorise le son qu'à partir d'un geste : chaque toucher, clic ou touche tente de le débloquer (quasi gratuit ensuite).
+for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) {
+  window.addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
+}
+document.addEventListener('visibilitychange', () => sound.setHidden(document.hidden));
+const showSound = () => {
+  soundBtn.textContent = sound.muted ? '🔇' : '🔊';
+  soundBtn.setAttribute('aria-label', sound.muted ? 'Remettre le son' : 'Couper le son');
+};
+const toggleSound = () => { sound.toggleMute(); showSound(); };
+soundBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+soundBtn.addEventListener('click', toggleSound);
+showSound();
 
 // Les boutons à l'écran (secours sans capteur) ne déclenchent pas de saut.
 for (const [el, side] of [[btnL, 'left'], [btnR, 'right']] as const) {
@@ -111,6 +133,7 @@ window.addEventListener('pointerdown', (e) => {
 window.addEventListener('pointerup', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('pointercancel', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM') toggleSound();
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ' || e.code === 'Enter') {
     if (!started) void play(progress.unlocked);
     else if (game.status === 'won' && endT > 0.8) next();
@@ -143,10 +166,12 @@ function frame(now: number) {
   const cpu0 = performance.now();
   const steer = controls.steer;
   if (started) {
-    const before = game.status;
+    const before = game.status, jumps = game.jumps;
     game.update(dt, controls.jumpHeld, steer);
-    if (before === 'running' && game.status === 'dead') { view.explode(); saveRun(); }
+    if (game.jumps !== jumps) sound.play('jump');
+    if (before === 'running' && game.status === 'dead') { view.explode(); sound.play('crash'); saveRun(); }
     if (before === 'running' && game.status === 'won') {
+      sound.play('win');
       saveRun();
       const last = current + 1 >= LEVELS.length;
       msg.innerHTML = `Niveau terminé !<small>${game.attempts} essai(s) · touche l'écran pour ${last ? 'revenir au menu' : 'le niveau suivant'}</small>`;
@@ -174,7 +199,8 @@ function frame(now: number) {
     perf.textContent =
       `${stats.fps.toFixed(0)} FPS  ${stats.avgMs.toFixed(1)} ms (pire ${stats.worstMs.toFixed(1)})\n` +
       `CPU ${cpuMs.toFixed(2)} ms  draw ${info.calls}  tri ${info.triangles}\n` +
-      `direction ${controls.tiltActive ? 'inclinaison' : 'clavier/boutons'} ${steer.toFixed(2)}`;
+      `direction ${controls.tiltActive ? 'inclinaison' : 'clavier/boutons'} ${steer.toFixed(2)}\n` +
+      `son ${sound.muted ? 'coupé' : sound.renderMs ? `rendu en ${sound.renderMs.toFixed(0)} ms (worker)` : 'en préparation'}`;
   }
   requestAnimationFrame(frame);
 }

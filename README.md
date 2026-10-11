@@ -39,3 +39,19 @@ l'icône d'écran d'accueil iOS (`apple-touch-icon.png`, 180 px, opaque) et les 
 (192 et 512 px, plus une 512 « maskable » pour les icônes adaptatives : le cube tient dans le cercle central de rayon 205).
 Le rendu passe par Chromium : Chrome installé, ou `CHROME_PATH=/chemin/vers/chrome npm run icons`.
 Un test (`icons.test.ts`) vérifie les liens de `index.html`, le manifest, les tailles et le poids des icônes.
+
+## Son
+
+Une ambiance par décor, générée par le code (`src/audio/`) : aucun fichier audio. Coût : 2 Ko gzip dans le bundle
+principal et un worker de 5 Ko chargé à part.
+
+- `soundscapes.ts` décrit chaque ambiance par des notes et des paramètres (tempo, gamme, grille d'accords, instruments) :
+  synthwave pour Néon, harpe et oiseaux pour Forêt, oud et vent du désert pour Dunes, cloches de verre pour Glacier,
+  bourdon, grondement et braises pour Volcan.
+- `synth.ts` en fait une boucle stéréo de 16 à 19 s (22 050 Hz) et trois effets accordés au décor (saut, choc, victoire).
+  Le rendu tourne dans un worker (`render.worker.ts`) : rien ne passe sur la boucle de jeu. Des tests vérifient que
+  chaque boucle se recolle sans clic, ne sature pas, a le même volume perçu que les autres et ne s'interrompt jamais.
+- `sound.ts` joue le tout avec la Web Audio API : rien n'est créé avant le premier toucher (exigence d'iOS), fondu
+  enchaîné au changement de décor, au plus 2 décors gardés en mémoire (≈ 3 Mo chacun).
+- Le bouton 🔊 (ou la touche M) coupe le son ; le choix est mémorisé, et le contexte audio est alors suspendu
+  (plus aucun calcul), comme quand l'onglet passe en arrière-plan. Sur iPhone, le bouton silencieux coupe aussi le son du jeu.
