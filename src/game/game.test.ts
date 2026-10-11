@@ -32,6 +32,18 @@ describe('Game', () => {
     expect(g.player.grounded).toBe(true);
   });
 
+  it('compte les décollages (pour le son du saut), pas les frames où le saut est tenu', () => {
+    const g = new Game(flat);
+    expect(g.jumps).toBe(0);
+    run(g, 0.2, true);
+    expect(g.jumps).toBe(1);
+    run(g, 2, true); // saut tenu : le cube re-saute à chaque atterrissage
+    expect(g.jumps).toBeGreaterThan(1);
+    const n = g.jumps;
+    run(g, 2, false);
+    expect(g.jumps).toBe(n);
+  });
+
   it('ne peut pas sauter en l\'air (pas de double saut)', () => {
     const g = new Game(flat);
     g.step(true);

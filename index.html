@@ -36,7 +36,8 @@
     #decor { font: 600 15px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); color: #fff; }
     #decor option { color: #000; }
     #menu button.done { border-color: #66ff99; }
-    #menubtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 16px; pointer-events: auto; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
+    #menubtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 62px; pointer-events: auto; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
+    #sndbtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 16px; pointer-events: auto; width: 38px; padding: 4px 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
     #msg small { display: block; font-size: 15px; opacity: .8; margin-top: 6px; }
   </style>
 </head>
@@ -52,10 +53,11 @@
     <button id="menubtn">☰ Niveaux</button>
     <div id="menu">
       <h1>Geomethree</h1>
-      <p>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter.<br>Ordinateur : flèches ← → et Espace</p>
+      <p>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter.<br>Ordinateur : flèches ← → et Espace, M coupe le son</p>
       <div id="levels" style="display:contents"></div>
       <label id="decorpick">Décor <select id="decor"></select></label>
     </div>
+    <button id="sndbtn" aria-label="Couper le son">🔊</button>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

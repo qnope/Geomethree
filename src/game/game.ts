@@ -32,6 +32,8 @@ export class Game {
   readonly player: Player = { x: 0, y: 0, z: 0, vy: 0, grounded: true, prevX: 0, prevY: 0, prevZ: 0 };
   status: Status = 'running';
   attempts = 1;
+  /** Nombre de décollages depuis la création (le son du saut compare avant / après update). */
+  jumps = 0;
   private acc = 0;
   private cursor = 0; // premier obstacle encore potentiellement atteignable
   // Boîtes réutilisées : zéro allocation par pas de simulation.
@@ -92,7 +94,7 @@ export class Game {
       if (nz !== p.z && !this.hitsBlock(p.x, p.y, nz)) p.z = nz;
     }
 
-    if (jumpHeld && p.grounded) p.vy = jumpVelocity;
+    if (jumpHeld && p.grounded) { p.vy = jumpVelocity; this.jumps++; }
     p.vy -= gravity * dt;
     p.x += speed * dt;
     p.y += p.vy * dt;
