@@ -17,7 +17,26 @@ rendu dans `src/render/scene.ts` (InstancedMesh, 12 à 13 draw calls avec le dé
 
 ## Niveaux
 
-`src/game/levels.ts` : cartes vues de dessus, 5 lignes = 5 couloirs (haut = gauche). `^` pic, `#` bloc, `1`…`9` pile de blocs, `.` vide. Un test (`solver.test.ts`) prouve que chaque niveau est faisable.
+`src/game/levels.ts` : cartes vues de dessus, 5 lignes = 5 couloirs (haut = gauche), `.` vide. Un test (`solver.test.ts`) prouve que chaque niveau est faisable.
+
+## Obstacles
+
+Un niveau ne nomme que des types d'obstacles. Chaque type a la même forme de collision partout, et chaque décor
+le dessine à sa façon : un même niveau se joue à l'identique dans n'importe quel décor, avec une autre saveur.
+
+| Carte | Type | Collision | Néon | Forêt | Dunes | Glacier | Volcan |
+|---|---|---|---|---|---|---|---|
+| `M` | mur | bloc de 3 de haut, plus haut que le saut | cube | tronc | grès en strates | colonne de glace | orgue basaltique |
+| `=` | rampe | bloc de 2 de haut, on roule dessus | cube | planches | terre cuite | bloc bleu | dalle de lave |
+| `#`, `1`…`9` | escalier | marche de 1 (ou du chiffre) de haut | cubes empilés | pierres moussues | calcaire | blocs de glace | lave refroidie |
+| `^` | pyramide | pic mortel de 1 de haut | pyramide | ronces | obsidienne | cristal | cristal |
+
+- Rendu (`src/render/obstacles.ts`) : chaque forme est dessinée dans une case unité puis étirée à la taille de
+  l'obstacle, sans jamais déborder de sa collision (un test le vérifie pour chaque décor). Un maillage instancié par
+  type présent dans le niveau et une seule géométrie pour toutes les arêtes : au plus 5 draw calls.
+- Ajouter un type : son nom dans `OBSTACLE_TYPES` et son caractère dans `CELLS` (`src/game/level.ts`), puis son
+  habillage dans chaque décor (`obstacles` dans `src/render/themes.ts`) ; les tests signalent un décor oublié.
+- Ajouter une forme : une entrée dans `OBSTACLE_SHAPES` (`themes.ts`) et sa construction dans `SHAPES` (`obstacles.ts`).
 
 ## Décors (thèmes)
 

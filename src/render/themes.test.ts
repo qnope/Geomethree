@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { THEMES, themeById, themeParam } from './themes';
 import { LEVELS } from '../game/levels';
+import { OBSTACLE_TYPES } from '../game/level';
 
 // Luminance relative et contraste WCAG : approximation de la lisibilité avant éclairage.
 const lum = (c: number): number => {
@@ -39,12 +40,17 @@ describe('THEMES', () => {
       expect(t.fog.far).toBeGreaterThan(t.fog.near);
       expect(t.fog.far).toBeLessThanOrEqual(150);
     });
-    it(`${t.name} : les pics se détachent de la piste (contraste ≥ 2)`, () => {
-      expect(contrast(t.spike.color, t.track.color)).toBeGreaterThanOrEqual(2);
+    it(`${t.name} : habille chaque type d'obstacle`, () => {
+      expect(Object.keys(t.obstacles).sort()).toEqual([...OBSTACLE_TYPES].sort());
     });
-    it(`${t.name} : les blocs se détachent de la piste (contraste ≥ 1,5)`, () => {
-      expect(contrast(t.block.color, t.track.color)).toBeGreaterThanOrEqual(1.5);
+    it(`${t.name} : les pyramides se détachent de la piste (contraste ≥ 2)`, () => {
+      expect(contrast(t.obstacles.pyramid.color, t.track.color)).toBeGreaterThanOrEqual(2);
     });
+    for (const type of ['wall', 'ramp', 'stairs'] as const) {
+      it(`${t.name} : ${type} se détache de la piste (contraste ≥ 1,5)`, () => {
+        expect(contrast(t.obstacles[type].color, t.track.color)).toBeGreaterThanOrEqual(1.5);
+      });
+    }
     it(`${t.name} : le cube se détache de la piste (contraste ≥ 2)`, () => {
       expect(contrast(t.player.color, t.track.color)).toBeGreaterThanOrEqual(2);
     });

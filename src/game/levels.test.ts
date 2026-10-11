@@ -8,6 +8,18 @@ describe('LEVELS', () => {
     expect(LEVELS).toHaveLength(10);
     expect(new Set(LEVELS.map((l) => l.name)).size).toBe(10);
   });
+  it('chaque obstacle a un type, dont la forme et les collisions sont les mêmes partout', () => {
+    for (const { level } of LEVELS) for (const o of level.obstacles) {
+      if (o.type === 'pyramid') expect([o.kind, o.h]).toEqual(['spike', 1]);
+      else expect(o.kind).toBe('block');
+      if (o.type === 'wall') expect(o.h).toBe(3);
+      if (o.type === 'ramp') expect(o.h).toBe(2);
+    }
+  });
+  it('les niveaux utilisent les 4 types d\'obstacles', () => {
+    const used = new Set(LEVELS.flatMap(({ level }) => level.obstacles.map((o) => o.type)));
+    expect([...used].sort()).toEqual(['pyramid', 'ramp', 'stairs', 'wall']);
+  });
   it('le temps de réaction diminue strictement sur les niveaux 1 à 5', () => {
     const times = LEVELS.slice(0, 5).map((l) => reactionTime(l.level));
     for (let i = 1; i < times.length; i++) expect(times[i]).toBeLessThan(times[i - 1]);

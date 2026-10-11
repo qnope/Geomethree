@@ -23,41 +23,41 @@ const put = (width: number, items: { lane: number; col: number; c: string }[]): 
 };
 
 /**
- * Murs de hauteur 3 sur toute la largeur sauf un passage de 2 couloirs (`gap` = couloir de gauche
+ * Murs (3 de haut) sur toute la largeur sauf un passage de 2 couloirs (`gap` = couloir de gauche
  * du passage). Impossible à sauter (le saut monte à 2,5) et assez large pour viser (cube de 1).
  */
 const walls = (width: number, list: { col: number; gap: number }[]): Segment =>
   put(width, list.flatMap(({ col, gap }) =>
     Array.from({ length: LANES }, (_, lane) => lane)
       .filter((l) => l !== gap && l !== gap + 1)
-      .map((lane) => ({ lane, col, c: '3' }))));
+      .map((lane) => ({ lane, col, c: 'M' }))));
 
 const join = (...segs: Segment[]): string[] =>
   Array.from({ length: LANES }, (_, lane) => segs.map((s) => s[lane]).join(''));
 
-// Plateau de 2 de haut au centre, flanqué de pics.
+// Rampe de 2 de haut au centre (on roule dessus), flanquée de pyramides.
 const platform = seg([
   '....................',
   '......^..^..........',
-  '....22222222........',
+  '....========........',
   '......^..^..........',
   '....................',
 ]);
 
-// Couloir de 2 de large (couloirs 3 et 4), murs hauts de chaque côté, pics à franchir.
+// Couloir de 2 de large (couloirs 3 et 4), murs de chaque côté, pyramides à franchir.
 const tunnel = seg([
-  '....3333333333333333....',
-  '....3333333333333333....',
+  '....MMMMMMMMMMMMMMMM....',
+  '....MMMMMMMMMMMMMMMM....',
   '..........^.............',
   '..............^.........',
-  '....3333333333333333....',
+  '....MMMMMMMMMMMMMMMM....',
 ]);
 
 
-/** Escalier de blocs (hauteurs 1, 2, 3) sur toute la largeur : on monte en sautant, puis on redescend. */
+/** Escalier (marches de 1, 2, 3) sur toute la largeur : on monte en sautant, puis on redescend. */
 const stairs = seg(Array.from({ length: LANES }, () => '1.2.3.3.2.1'));
 
-/** Ligne de pics sur toute la largeur : saut obligatoire. */
+/** Ligne de pyramides sur toute la largeur : saut obligatoire. */
 const spikeLine = put(1, [0, 1, 2, 3, 4].map((lane) => ({ lane, col: 0, c: '^' })));
 const spike = put(1, [{ lane: 2, col: 0, c: '^' }]);
 const spikes3 = put(1, [1, 2, 3].map((lane) => ({ lane, col: 0, c: '^' })));
