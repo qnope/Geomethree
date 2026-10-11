@@ -30,3 +30,12 @@ dans `levels.ts` (`theme: 'glacier'`) : plusieurs niveaux peuvent partager un d�
   (il ne remplit que les pixels restés vides), sol uni recalé sous la caméra, objets du bord de piste instanciés
   sur une tuile de 120 u qui se répète, particules animées entièrement par le GPU. Au plus 5 draw calls,
   10 000 triangles et 1 200 points par décor, rien d'alloué par frame : des tests le vérifient.
+
+## Icône
+
+Une seule source, `icons/icon.svg` (le cube sur la piste du décor Néon), d'où `npm run icons` génère dans `public/` :
+le favicon (`favicon.svg` aux coins arrondis, et `favicon-32.png` pour les navigateurs sans SVG),
+l'icône d'écran d'accueil iOS (`apple-touch-icon.png`, 180 px, opaque) et les icônes Android / PWA du `manifest.webmanifest`
+(192 et 512 px, plus une 512 « maskable » pour les icônes adaptatives : le cube tient dans le cercle central de rayon 205).
+Le rendu passe par Chromium : Chrome installé, ou `CHROME_PATH=/chemin/vers/chrome npm run icons`.
+Un test (`icons.test.ts`) vérifie les liens de `index.html`, le manifest, les tailles et le poids des icônes.

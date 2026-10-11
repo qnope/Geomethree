@@ -1,0 +1,16 @@
+{
+  "name": "Geomethree",
+  "short_name": "Geomethree",
+  "description": "Jeu de réflexes en 3D : guide le cube et saute par-dessus les pics.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#0b0820",
+  "theme_color": "#0b0820",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
