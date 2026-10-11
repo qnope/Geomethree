@@ -21,25 +21,25 @@ export function challenges(level: Level): Challenge[] {
   return out;
 }
 
+/** Temps libres (en secondes) entre chaque défi et le suivant. */
+export function reactionGaps(level: Level): number[] {
+  const cs = challenges(level);
+  return cs.slice(1).map((c, i) => (c.x0 - cs[i].x1) / CONFIG.speed);
+}
+
 /**
  * « Temps de réaction » du niveau : le plus petit temps libre (en secondes) entre la fin d'un défi
  * et le début du suivant. Plus il est court, plus il faut enchaîner vite les décisions.
  */
 export function reactionTime(level: Level): number {
-  const cs = challenges(level);
-  let min = Infinity;
-  for (let i = 1; i < cs.length; i++) min = Math.min(min, (cs[i].x0 - cs[i - 1].x1) / CONFIG.speed);
-  return min;
+  return Math.min(...reactionGaps(level));
 }
 
-export const REACTION_HARD_FIRST = 2.2; // s, niveau 6
-export const REACTION_HARD_LAST = 1;    // s, niveau 10
+// Niveaux 6 à 10 : le temps de réaction varie dans le niveau, entre ces deux bornes.
+export const REACTION_CALM = 2.5;  // s, zones calmes
+export const REACTION_STRESS = 1;  // s, zones stressantes
 
-/**
- * Temps de réaction visé pour le niveau `i` (0 = niveau 1) : de 10 s à 2,5 s sur les niveaux 1 à 5,
- * puis de 2,2 s à 1 s sur les niveaux 6 à 10, linéaire dans chaque série.
- */
+/** Temps de réaction visé pour les niveaux 1 à 5 (`i` = 0…4) : de 10 s à 2,5 s, linéaire. */
 export function reactionTarget(i: number): number {
-  if (i <= 4) return REACTION_FIRST + ((REACTION_LAST - REACTION_FIRST) * i) / 4;
-  return REACTION_HARD_FIRST + ((REACTION_HARD_LAST - REACTION_HARD_FIRST) * (i - 5)) / 4;
+  return REACTION_FIRST + ((REACTION_LAST - REACTION_FIRST) * i) / 4;
 }
