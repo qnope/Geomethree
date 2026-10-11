@@ -2,6 +2,7 @@
 import { Game } from './game/game';
 import { LEVELS } from './game/levels';
 import { GameScene } from './render/scene';
+import { THEMES, themeById, themeParam, type ThemeId } from './render/themes';
 import { FrameStats } from './perf';
 import { Controls } from './input';
 import { loadProgress, saveProgress, recordRun, isUnlocked } from './progress';
@@ -9,6 +10,7 @@ import { loadProgress, saveProgress, recordRun, isUnlocked } from './progress';
 const $ = (id: string) => document.getElementById(id)!;
 const fill = $('fill'), pct = $('pct'), att = $('att'), perf = $('perf'), msg = $('msg');
 const dot = $('dot'), btnL = $('bl'), btnR = $('br'), menu = $('menu'), levelList = $('levels'), menuBtn = $('menubtn');
+const decorPick = $('decor') as HTMLSelectElement;
 
 const storage = (() => { try { return window.localStorage; } catch { return null; } })();
 const progress = storage ? loadProgress(storage, LEVELS.length) : loadProgress({ getItem: () => null, setItem: () => {} }, LEVELS.length);
@@ -22,6 +24,8 @@ const stats = new FrameStats(120);
 const controls = new Controls();
 controls.attach();
 
+// Décor imposé à tous les niveaux (aperçu) : `?theme=` dans l'URL ou le sélecteur du menu. null : celui du niveau.
+let forcedTheme: ThemeId | null = themeParam(location.search);
 let started = false;
 let tiltAsked = false;
 let endT = 0;
@@ -34,7 +38,7 @@ function loadLevel(i: number) {
   canvas = document.createElement('canvas');
   document.body.prepend(canvas);
   game = new Game(LEVELS[i].level);
-  view = new GameScene(canvas, game);
+  view = new GameScene(canvas, game, themeById(forcedTheme ?? LEVELS[i].theme));
   endT = 0;
   lastPct = -1;
   msg.style.display = 'none';
@@ -48,7 +52,7 @@ function renderMenu() {
     const best = Math.round(progress.best[i] * 100);
     b.disabled = !isUnlocked(progress, i);
     b.classList.toggle('done', best === 100);
-    b.innerHTML = `<span>${i + 1}. ${l.name}</span><small>${b.disabled ? '🔒' : best === 100 ? '✔ 100 %' : `meilleur ${best} %`}</small>`;
+    b.innerHTML = `<span>${i + 1}. ${l.name}<em>${themeById(forcedTheme ?? l.theme).name}</em></span><small>${b.disabled ? '🔒' : best === 100 ? '✔ 100 %' : `meilleur ${best} %`}</small>`;
     b.addEventListener('click', () => void play(i));
     levelList.append(b);
   });
@@ -72,6 +76,16 @@ async function play(i: number) {
 const saveRun = () => { if (recordRun(progress, current, game.progress, game.status === 'won')) persist(); };
 menuBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 menuBtn.addEventListener('click', () => { if (started) saveRun(); showMenu(); });
+
+decorPick.append(new Option('celui du niveau', ''), ...THEMES.map((t) => new Option(t.name, t.id)));
+decorPick.value = forcedTheme ?? '';
+decorPick.addEventListener('pointerdown', (e) => e.stopPropagation()); // sinon le preventDefault global bloque la liste
+decorPick.addEventListener('change', () => {
+  forcedTheme = (decorPick.value || null) as ThemeId | null;
+  decorPick.blur();
+  loadLevel(current); // le décor change aussi derrière le menu
+  renderMenu();
+});
 
 
 // Les boutons à l'écran (secours sans capteur) ne déclenchent pas de saut.
