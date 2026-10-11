@@ -5,6 +5,7 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 const single = !!process.env.SINGLEFILE;
 
 export default defineConfig({
+  base: './',
   plugins: single ? [viteSingleFile()] : [],
   build: {
     target: 'es2020',
