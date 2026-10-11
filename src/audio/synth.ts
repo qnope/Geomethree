@@ -13,7 +13,8 @@ export const RATE = 22050;
 export interface Stereo { left: Float32Array; right: Float32Array }
 export interface RenderedSoundscape {
   rate: number;
-  loop: Stereo;
+  /** Absente quand l'ambiance est coupée dans les réglages. */
+  loop?: Stereo;
   jump: Stereo;
   crash: Stereo;
   win: Stereo;
@@ -398,20 +399,27 @@ function sfx(seconds: number, draw: (m: Mix) => void): Stereo {
   return out;
 }
 
-export function renderSoundscape(s: Soundscape): RenderedSoundscape {
+/** Boucle d'ambiance, au volume perçu commun à tous les décors. */
+function renderLoop(s: Soundscape, seed: number): Stereo {
   const m = new Mix(Math.round(loopSeconds(s) * RATE));
-  const seed = s.bpm * 1000 + s.root;
   s.parts.forEach((p, k) => score(m, s, p, seed + 7919 * (k + 1)));
   effects(m, s);
-  const loop = finish(m.L, m.R, 10 ** ((LOUDNESS - loudness(m.L, m.R)) / 20));
+  return finish(m.L, m.R, 10 ** ((LOUDNESS - loudness(m.L, m.R)) / 20));
+}
 
+/**
+ * Effets sonores accordés au décor, et sa boucle d'ambiance si `withLoop`
+ * (sans ambiance, on évite le gros du calcul et 3 Mo de mémoire).
+ */
+export function renderSoundscape(s: Soundscape, withLoop = true): RenderedSoundscape {
+  const seed = s.bpm * 1000 + s.root;
   const center: Out = { pan: 0, spread: 0, fx: {} };
   const r = rng(seed);
   const deg = (d: number) => hz(degreeToMidi(s.root, s.scale, d));
   const octave = s.scale.length;
   return {
     rate: RATE,
-    loop,
+    ...(withLoop ? { loop: renderLoop(s, seed) } : {}),
     // Saut : petit « bip » montant, sur la quinte de la tonique, deux octaves au-dessus.
     jump: sfx(0.12, (x) => note(x, 0, 0.05, hz(s.root + 31), { wave: 'triangle', attack: 0.002, decay: 0.04, release: 0.03, glide: 0.6, glideTime: 0.025, cutoff: 3500 }, 1, center, r)),
     // Choc : souffle de bruit qui s'assombrit et coup sourd qui plonge.

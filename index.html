@@ -36,8 +36,17 @@
     #decor { font: 600 15px system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); color: #fff; }
     #decor option { color: #000; }
     #menu button.done { border-color: #66ff99; }
-    #menubtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 62px; pointer-events: auto; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
-    #sndbtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 16px; pointer-events: auto; width: 38px; padding: 4px 0; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
+    #menubtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 16px; pointer-events: auto; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
+    #menu #setbtn { width: auto; justify-content: center; padding: 8px 16px; font-size: 15px; margin-top: 4px; }
+    #settings { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(11,8,32,.94); pointer-events: auto; padding: 16px; box-sizing: border-box; }
+    #settings h1 { margin: 0 0 8px; font-size: 30px; text-shadow: 0 0 12px #f3c; }
+    .opt { width: min(86vw, 360px); box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 18px; border-radius: 14px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); font-size: 17px; }
+    .opt em { display: block; font: 500 12px system-ui, sans-serif; opacity: .65; }
+    .opt input { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 50px; height: 30px; margin: 0; border-radius: 15px; background: rgba(255,255,255,.25); transition: background .15s; }
+    .opt input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .15s; }
+    .opt input:checked { background: #33ddff; }
+    .opt input:checked::after { transform: translateX(20px); }
+    #setback { margin-top: 6px; padding: 10px 24px; border-radius: 12px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); color: #fff; font: 600 16px system-ui, sans-serif; }
     #msg small { display: block; font-size: 15px; opacity: .8; margin-top: 6px; }
   </style>
 </head>
@@ -53,11 +62,17 @@
     <button id="menubtn">☰ Niveaux</button>
     <div id="menu">
       <h1>Geomethree</h1>
-      <p>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter.<br>Ordinateur : flèches ← → et Espace, M coupe le son</p>
+      <p>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter.<br>Ordinateur : flèches ← → et Espace</p>
       <div id="levels" style="display:contents"></div>
       <label id="decorpick">Décor <select id="decor"></select></label>
+      <button id="setbtn">⚙︎ Réglages</button>
     </div>
-    <button id="sndbtn" aria-label="Couper le son">🔊</button>
+    <div id="settings">
+      <h1>Réglages</h1>
+      <label class="opt"><span>Ambiance sonore<em>musique et bruits du décor</em></span><input type="checkbox" id="optmusic" /></label>
+      <label class="opt"><span>Effets sonores<em>saut, choc, victoire</em></span><input type="checkbox" id="optsfx" /></label>
+      <button id="setback">Retour</button>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

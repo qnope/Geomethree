@@ -2,13 +2,13 @@ import RenderWorker from './render.worker?worker';
 import type { ThemeId } from '../render/themes';
 import type { RenderedSoundscape } from './synth';
 
-type Render = (id: ThemeId) => Promise<RenderedSoundscape>;
+type Render = (id: ThemeId, withLoop: boolean) => Promise<RenderedSoundscape>;
 
 /** Secours sans worker : rendu sur le fil principal, code chargé seulement dans ce cas. */
-const local: Render = async (id) => {
+const local: Render = async (id, withLoop) => {
   const [{ renderSoundscape }, { SOUNDSCAPES }] = await Promise.all([import('./synth'), import('./soundscapes')]);
   const t0 = performance.now();
-  const r = renderSoundscape(SOUNDSCAPES[id]);
+  const r = renderSoundscape(SOUNDSCAPES[id], withLoop);
   r.ms = performance.now() - t0;
   return r;
 };
@@ -18,13 +18,13 @@ const local: Render = async (id) => {
  * on retombe sur le rendu local.
  */
 export function workerRenderer(): Render {
-  const waiting = new Map<number, { id: ThemeId; done: (r: RenderedSoundscape) => void }>();
+  const waiting = new Map<number, { id: ThemeId; withLoop: boolean; done: (r: RenderedSoundscape) => void }>();
   let next = 0;
   let worker: Worker | null = null;
   const fallback = () => {
     worker?.terminate();
     worker = null;
-    for (const [n, w] of waiting) { waiting.delete(n); void local(w.id).then(w.done); }
+    for (const [n, w] of waiting) { waiting.delete(n); void local(w.id, w.withLoop).then(w.done); }
   };
   try {
     worker = new RenderWorker();
@@ -36,13 +36,13 @@ export function workerRenderer(): Render {
   } catch {
     worker = null;
   }
-  return (id) => {
-    if (!worker) return local(id);
+  return (id, withLoop) => {
+    if (!worker) return local(id, withLoop);
     const w = worker;
     return new Promise((done) => {
       const n = next++;
-      waiting.set(n, { id, done });
-      w.postMessage({ n, id });
+      waiting.set(n, { id, withLoop, done });
+      w.postMessage({ n, id, withLoop });
     });
   };
 }
