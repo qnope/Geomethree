@@ -3,7 +3,7 @@ import type { Game } from '../game/game';
 import { TRACK_HALF } from '../game/level';
 import { rollPose, type RollPose } from '../game/roll';
 import { Decor } from './decor';
-import { buildObstacles } from './obstacles';
+import { buildObstacles, type ObstacleGroup } from './obstacles';
 import type { Theme } from './themes';
 
 const PIECES = 12;
@@ -19,6 +19,7 @@ export class GameScene {
   private readonly piecePos = new Float32Array(PIECES * 3);
   private readonly tmp = new THREE.Object3D();
   private readonly decor: Decor;
+  private readonly obstacles: ObstacleGroup;
   private readonly pose: RollPose = { cx: 0, cy: 0, angle: 0 };
   private deathT = -1;
 
@@ -75,7 +76,8 @@ export class GameScene {
     this.scene.add(this.player);
 
     // Obstacles : un maillage instancié par type présent, habillé par le décor, plus leurs arêtes.
-    this.scene.add(buildObstacles(game.level, theme));
+    this.obstacles = buildObstacles(game.level, theme);
+    this.scene.add(this.obstacles);
 
     // Ligne d'arrivée.
     const finish = new THREE.Mesh(
@@ -148,6 +150,7 @@ export class GameScene {
     const x = p.prevX + (p.x - p.prevX) * a;
     const y = p.prevY + (p.y - p.prevY) * a;
     const z = p.prevZ + (p.z - p.prevZ) * a;
+    this.obstacles.update(x); // les mobiles suivent la même horloge que la simulation : la position du cube
 
     // Roulade physique : l'angle suit la distance (1 tour = 4 cases), au sol comme en l'air.
     // Au sol, le cube pivote sur son arête avant ; en l'air, il tourne autour de son centre.

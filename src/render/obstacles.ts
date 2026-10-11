@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { OBSTACLE_TYPES, type Level } from '../game/level';
+import { OBSTACLE_TYPES, type Level, type Obstacle } from '../game/level';
+import { moverZ } from '../game/game';
 import type { ObstacleShape, Theme } from './themes';
 
 /**
@@ -8,6 +9,7 @@ import type { ObstacleShape, Theme } from './themes';
  * Chaque forme est dessinée dans une case unité (x et z dans [-0,5 ; 0,5], y dans [0 ; 1]),
  * puis étirée à la taille de l'obstacle : le rendu ne déborde jamais de la collision.
  * Un maillage instancié par type présent, plus une seule géométrie pour toutes les arêtes.
+ * Les mobiles roulent sur leur rail : `update` les replace à chaque frame, sans rien allouer.
  */
 
 type Profile = readonly (readonly [radius: number, y: number])[];
@@ -60,6 +62,41 @@ function lathe(out: number[], normals: number[], profile: Profile, sides: number
   if (rTop > 0) for (let i = 1; i + 1 < sides; i++) face(pt(rTop, yTop, 0), pt(rTop, yTop, i), pt(rTop, yTop, i + 1));
 }
 
+/** Triangle à normale plate, retourné au besoin pour regarder à l'opposé du point intérieur `inside`. */
+function tri(out: number[], normals: number[], a: number[], b: number[], c: number[], inside: readonly number[]): void {
+  const n = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+    .cross(new THREE.Vector3(c[0] - a[0], c[1] - a[1], c[2] - a[2])).normalize();
+  if (n.x * (a[0] - inside[0]) + n.y * (a[1] - inside[1]) + n.z * (a[2] - inside[2]) < 0) {
+    [b, c] = [c, b];
+    n.negate();
+  }
+  out.push(...a, ...b, ...c);
+  normals.push(n.x, n.y, n.z, n.x, n.y, n.z, n.x, n.y, n.z);
+}
+
+/**
+ * Prisme droit : section `pts` (polygone étoilé autour de son centre de gravité), épaisse de 2 × `half` le long de
+ * `axis`. Axe x : la section est face à la caméra (roue, scie) ; axe z : elle court en travers de la piste (tronc couché).
+ */
+function prism(out: number[], normals: number[], pts: readonly (readonly [u: number, v: number])[], axis: 'x' | 'z', half: number): void {
+  const at = (u: number, v: number, w: number) => (axis === 'x' ? [w, v, u] : [u, v, w]);
+  const cu = pts.reduce((s, p) => s + p[0], 0) / pts.length, cv = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+  const inside = at(cu, cv, 0);
+  for (let i = 0; i < pts.length; i++) {
+    const [u0, v0] = pts[i], [u1, v1] = pts[(i + 1) % pts.length];
+    tri(out, normals, at(u0, v0, -half), at(u1, v1, -half), at(u1, v1, half), inside);
+    tri(out, normals, at(u0, v0, -half), at(u1, v1, half), at(u0, v0, half), inside);
+    for (const w of [-half, half]) tri(out, normals, at(cu, cv, w), at(u0, v0, w), at(u1, v1, w), inside);
+  }
+}
+
+/** `n` points sur un cercle de centre (0 ; 0,5), rayons alternés (étoile) si `radii` en donne plusieurs. */
+const ring = (n: number, radii: readonly number[], phase = 0) =>
+  Array.from({ length: n }, (_, i) => {
+    const a = phase + (i / n) * Math.PI * 2, r = radii[i % radii.length];
+    return [r * Math.sin(a), 0.5 + r * Math.cos(a)] as const;
+  });
+
 /** Rayon d'un polygone régulier à `n` côtés dont les côtés sont à 0,5 du centre. */
 const flatTo = (n: number) => 0.5 / Math.cos(Math.PI / n);
 
@@ -77,6 +114,15 @@ const SHAPES: Record<ObstacleShape, (pos: number[], nor: number[]) => void> = {
     lathe(p, n, [[0.18, 0], [0, 0.6]], 5, { at: [-0.27, 0.25] });
     lathe(p, n, [[0.16, 0], [0, 0.5]], 5, { at: [0.28, -0.27], phase: 0.6 });
   },
+  // Tremplins, une fois étirés à leur faible hauteur : rampe de lancement qui monte vers l'avant, ou galette.
+  wedge: (p, n) => prism(p, n, [[-0.5, 0], [0.5, 0], [0.5, 1]], 'z', 0.4),
+  disc: (p, n) => lathe(p, n, [[0.5, 0], [0.42, 1]], 12),
+  // Tronc couché en travers de la piste : faces plates dessus et dessous, pour rouler exactement sur son dessus.
+  log: (p, n) => prism(p, n, ring(8, [flatTo(8)], Math.PI / 8), 'z', 0.5),
+  // Mobiles : centrés à mi-hauteur pour rouler sur eux-mêmes sans sortir de leur case.
+  ball: (p, n) => lathe(p, n, [[0, 0], [0.5 * Math.SQRT1_2, 0.5 - 0.5 * Math.SQRT1_2], [0.5, 0.5], [0.5 * Math.SQRT1_2, 0.5 + 0.5 * Math.SQRT1_2], [0, 1]], 8),
+  wheel: (p, n) => prism(p, n, ring(12, [0.5]), 'x', 0.3),
+  saw: (p, n) => prism(p, n, ring(24, [0.5, 0.33]), 'x', 0.15),
 };
 
 /** Géométrie d'une forme dans la case unité, non indexée, normales comprises. */
@@ -94,12 +140,64 @@ const EDGE_ANGLE = 40;
 /** Arêtes poussées un peu vers l'extérieur pour ne pas scintiller sur les faces. */
 const EDGE_GROW = 1.004;
 
-export function buildObstacles(level: Level, theme: Theme): THREE.Group {
-  const group = new THREE.Group();
-  group.name = 'obstacles';
+/** Obstacles d'un niveau. `update` fait rouler les mobiles, tout le reste est immobile. */
+export class ObstacleGroup extends THREE.Group {
+  private readonly movers: Obstacle[];
+  private moverMesh: THREE.InstancedMesh | null = null;
+  private readonly m = new THREE.Matrix4();
+  private lastPx = NaN;
+
+  constructor(level: Level) {
+    super();
+    this.name = 'obstacles';
+    this.movers = level.obstacles.filter((o) => o.kind === 'mover');
+  }
+
+  /** @internal */
+  setMovers(mesh: THREE.InstancedMesh): void {
+    this.moverMesh = mesh;
+    // Sphère englobante de tous les rails : les mobiles bougent, ils ne doivent pas être écartés à tort.
+    const box = new THREE.Box3();
+    for (const o of this.movers) box.expandByPoint(new THREE.Vector3(o.x, o.y, o.z0)).expandByPoint(new THREE.Vector3(o.x + 1, o.y + o.h, o.z1));
+    mesh.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+    this.update(0);
+  }
+
+  /** Place les mobiles pour un cube en `px` (sa position interpolée), comme la simulation : rien n'est alloué. */
+  update(px: number): void {
+    const mesh = this.moverMesh;
+    if (!mesh || px === this.lastPx) return;
+    this.lastPx = px;
+    const m = this.m, te = m.elements;
+    for (let i = 0; i < this.movers.length; i++) {
+      const o = this.movers[i];
+      const z = moverZ(o, px);
+      // Roule sans glisser (rayon 0,5) autour de son centre, à mi-hauteur de sa case.
+      const a = 2 * (z - o.z0);
+      m.makeRotationX(a);
+      te[12] = o.x + 0.5;
+      te[13] = o.y + 0.5 - 0.5 * Math.cos(a);
+      te[14] = z + 0.5 - 0.5 * Math.sin(a);
+      mesh.setMatrixAt(i, m);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+/** Décalage des contours plats vers l'extérieur, pour ne pas scintiller sur la face qu'ils bordent. */
+const OUTLINE_GROW = 0.002;
+/** Hauteur des rails des mobiles : au-dessus des lignes de la piste (0,02 et 0,03). */
+const RAIL_Y = 0.04;
+
+export function buildObstacles(level: Level, theme: Theme): ObstacleGroup {
+  const group = new ObstacleGroup(level);
   const tmp = new THREE.Object3D();
   const edgePos: number[] = [], edgeCol: number[] = [];
   const color = new THREE.Color();
+  const line = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number) => {
+    edgePos.push(x0, y0, z0, x1, y1, z1);
+    edgeCol.push(color.r, color.g, color.b, color.r, color.g, color.b);
+  };
 
   for (const type of OBSTACLE_TYPES) {
     const list = level.obstacles.filter((o) => o.type === type);
@@ -121,8 +219,34 @@ export function buildObstacles(level: Level, theme: Theme): THREE.Group {
       mesh.setMatrixAt(i, tmp.matrix);
     });
     group.add(mesh);
+    if (type === 'mover') group.setMovers(mesh);
 
     if (style.edges === undefined) continue;
+    color.setHex(style.edges);
+
+    if (type === 'mover') {
+      // Un mobile bouge : pas d'arêtes, mais son rail tracé sur la piste (deux lignes et deux butées).
+      for (const o of list) {
+        for (const dx of [0.3, 0.7]) line(o.x + dx, RAIL_Y, o.z0, o.x + dx, RAIL_Y, o.z1);
+        for (const z of [o.z0, o.z1]) line(o.x + 0.3, RAIL_Y, z, o.x + 0.7, RAIL_Y, z);
+      }
+      continue;
+    }
+
+    if (type === 'pit') {
+      // Fosses voisines fondues en une seule : on ne trace que les côtés qui ne touchent pas une autre fosse.
+      const cells = new Set(list.map((o) => `${o.x}:${o.z0}`));
+      const g = OUTLINE_GROW;
+      for (const o of list) {
+        const y = o.y + o.h;
+        if (!cells.has(`${o.x - 1}:${o.z0}`)) line(o.x - g, y, o.z0 - g, o.x - g, y, o.z1 + g);
+        if (!cells.has(`${o.x + 1}:${o.z0}`)) line(o.x + 1 + g, y, o.z0 - g, o.x + 1 + g, y, o.z1 + g);
+        if (!cells.has(`${o.x}:${o.z0 - 1}`)) line(o.x - g, y, o.z0 - g, o.x + 1 + g, y, o.z0 - g);
+        if (!cells.has(`${o.x}:${o.z0 + 1}`)) line(o.x - g, y, o.z1 + g, o.x + 1 + g, y, o.z1 + g);
+      }
+      continue;
+    }
+
     const unit = new THREE.EdgesGeometry(geo, EDGE_ANGLE).getAttribute('position');
     // Le contour du bas est caché par la piste : on ne garde que les arêtes qui montent ou celles du dessus.
     // Le contour du dessus est répété à chaque unité de hauteur pour les décors à strates.
@@ -133,7 +257,6 @@ export function buildObstacles(level: Level, theme: Theme): THREE.Group {
       seen.push(v, v + 1);
       if (y0 > 0.999 && y1 > 0.999) top.push(v, v + 1);
     }
-    color.setHex(style.edges);
     for (const o of list) {
       const cx = o.x + 0.5, cz = (o.z0 + o.z1) / 2, w = o.z1 - o.z0;
       const push = (v: number, y: number) => {

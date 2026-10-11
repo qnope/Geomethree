@@ -43,14 +43,27 @@ describe('THEMES', () => {
     it(`${t.name} : habille chaque type d'obstacle`, () => {
       expect(Object.keys(t.obstacles).sort()).toEqual([...OBSTACLE_TYPES].sort());
     });
-    it(`${t.name} : les pyramides se détachent de la piste (contraste ≥ 2)`, () => {
-      expect(contrast(t.obstacles.pyramid.color, t.track.color)).toBeGreaterThanOrEqual(2);
-    });
-    for (const type of ['wall', 'ramp', 'stairs'] as const) {
+    // Ce qui tue ou propulse doit sauter aux yeux : par sa couleur, ou par son contour (fosse sombre bordée de lumière).
+    for (const type of ['pyramid', 'pit', 'mover', 'pad'] as const) {
+      it(`${t.name} : ${type} se détache de la piste (contraste ≥ 2)`, () => {
+        const { color, edges } = t.obstacles[type];
+        const best = Math.max(contrast(color, t.track.color), type === 'pit' && edges !== undefined ? contrast(edges, t.track.color) : 0);
+        expect(best).toBeGreaterThanOrEqual(2);
+      });
+    }
+    for (const type of ['wall', 'ramp', 'stairs', 'beam'] as const) {
       it(`${t.name} : ${type} se détache de la piste (contraste ≥ 1,5)`, () => {
         expect(contrast(t.obstacles[type].color, t.track.color)).toBeGreaterThanOrEqual(1.5);
       });
     }
+    it(`${t.name} : le rail des mobiles se voit sur la piste (contraste ≥ 1,5)`, () => {
+      const rail = t.obstacles.mover.edges;
+      expect(rail).toBeDefined();
+      expect(contrast(rail!, t.track.color)).toBeGreaterThanOrEqual(1.5);
+    });
+    it(`${t.name} : la poutre ne se confond pas avec le mur (autre couleur)`, () => {
+      expect(t.obstacles.beam.color).not.toBe(t.obstacles.wall.color);
+    });
     it(`${t.name} : le cube se détache de la piste (contraste ≥ 2)`, () => {
       expect(contrast(t.player.color, t.track.color)).toBeGreaterThanOrEqual(2);
     });

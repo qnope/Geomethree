@@ -13,7 +13,9 @@ export type ThemeId = 'neon' | 'foret' | 'dunes' | 'glacier' | 'volcan';
 export type SkylineStyle = 'peaks' | 'mesas' | 'volcanoes' | 'trees';
 
 /** Forme dessinée dans la case d'un obstacle, sans en déborder (voir `obstacles.ts`). */
-export const OBSTACLE_SHAPES = ['box', 'hex', 'octo', 'round', 'pyramid', 'cone', 'crystal', 'cluster'] as const;
+export const OBSTACLE_SHAPES = [
+  'box', 'hex', 'octo', 'round', 'pyramid', 'cone', 'crystal', 'cluster', 'wedge', 'disc', 'log', 'ball', 'wheel', 'saw',
+] as const;
 export type ObstacleShape = (typeof OBSTACLE_SHAPES)[number];
 
 /** Habillage d'un type d'obstacle dans un décor. */
@@ -22,7 +24,7 @@ export interface ObstacleStyle {
   color: number;
   emissive?: number;
   glow?: number;
-  /** Couleur des arêtes ; pas d'arêtes si absente. */
+  /** Couleur des arêtes ; pas d'arêtes si absente. Fosse : son contour. Mobile : son rail, tracé sur la piste. */
   edges?: number;
   /** Arêtes du dessus répétées à chaque unité de hauteur : strates, briques, marches. */
   layers?: boolean;
@@ -76,6 +78,10 @@ export const THEMES: readonly Theme[] = [
       ramp: { shape: 'box', color: 0x18d6a0, emissive: 0x08805a, glow: 0.5, edges: 0xb0ffe6 },
       stairs: { shape: 'box', color: 0xc04cff, emissive: 0x7a1fd0, glow: 0.5, edges: 0xffc8ff, layers: true },
       pyramid: { shape: 'pyramid', color: 0xff3d7f, emissive: 0xff1a5e, glow: 0.8 },
+      pit: { shape: 'box', color: 0x02010a, edges: 0x33ddff }, // trou dans la grille, bordé de cyan
+      beam: { shape: 'box', color: 0xff7a1a, emissive: 0xff4a00, glow: 0.6, edges: 0xffd9b8 }, // barre laser
+      pad: { shape: 'wedge', color: 0xffe600, emissive: 0xffc400, glow: 0.9, edges: 0xffffff }, // rampe de lancement jaune
+      mover: { shape: 'saw', color: 0xff2bd6, emissive: 0xc0109e, glow: 0.8, edges: 0xff2bd6 }, // scie
     },
     player: { color: 0x33ddff, emissive: 0x0a6a88, edges: 0xffffff },
     finish: 0x66ff99,
@@ -98,6 +104,10 @@ export const THEMES: readonly Theme[] = [
       ramp: { shape: 'box', color: 0xd9a066, edges: 0x5e3f24 }, // planches
       stairs: { shape: 'octo', color: 0x8a9a78, edges: 0x3a4a2a, layers: true }, // pierres moussues
       pyramid: { shape: 'cluster', color: 0xffb703, emissive: 0xff7b00, glow: 0.4 }, // ronces
+      pit: { shape: 'box', color: 0x1f5f7a, emissive: 0x0b3346, glow: 0.4, edges: 0xbfeaff }, // mare
+      beam: { shape: 'log', color: 0xc8965a, edges: 0x5e3f24 }, // branche écorcée, couchée
+      pad: { shape: 'disc', color: 0xff5a4a, emissive: 0x6a0000, glow: 0.3, edges: 0xffffff }, // champignon
+      mover: { shape: 'wheel', color: 0xe8c48a, edges: 0x3d2614 }, // rondin qui roule
     },
     player: { color: 0x33ddff, emissive: 0x0a6a88, edges: 0xffffff },
     finish: 0xfff3a0,
@@ -120,6 +130,10 @@ export const THEMES: readonly Theme[] = [
       ramp: { shape: 'box', color: 0xe8a25a, edges: 0x7a3e1d },
       stairs: { shape: 'box', color: 0xfff0d0, edges: 0x9a6a3a, layers: true }, // calcaire
       pyramid: { shape: 'pyramid', color: 0x2b1b4a, emissive: 0x7a3cff, glow: 0.35 }, // obsidienne
+      pit: { shape: 'box', color: 0x4a2a14, edges: 0xffe2b0 }, // sables mouvants
+      beam: { shape: 'log', color: 0x5a3a24, edges: 0xd9a066 }, // tronc de palmier
+      pad: { shape: 'wedge', color: 0x2ec4b6, emissive: 0x0a6a60, glow: 0.5, edges: 0xd0fff8 }, // tremplin turquoise
+      mover: { shape: 'ball', color: 0xf2d29b, edges: 0x5a2a10 }, // virevoltant
     },
     player: { color: 0x33ddff, emissive: 0x0a6a88, edges: 0xffffff },
     finish: 0x66ff99,
@@ -143,6 +157,10 @@ export const THEMES: readonly Theme[] = [
       ramp: { shape: 'box', color: 0x2f7fc4, edges: 0xdff4ff },
       stairs: { shape: 'box', color: 0x5cb8e8, edges: 0xffffff, layers: true }, // blocs de glace
       pyramid: { shape: 'crystal', color: 0xc81d4e, emissive: 0x8a0020, glow: 0.3 },
+      pit: { shape: 'box', color: 0x0b3d6b, emissive: 0x041c36, glow: 0.3, edges: 0xffffff }, // crevasse
+      beam: { shape: 'log', color: 0x1f6fb8, emissive: 0x0a3a6a, glow: 0.2, edges: 0xdff4ff }, // pont de glace
+      pad: { shape: 'wedge', color: 0x7a3cff, emissive: 0x4a10c0, glow: 0.6, edges: 0xe8dcff }, // tremplin d'aurore
+      mover: { shape: 'saw', color: 0x1a4f8a, emissive: 0x0a2a60, glow: 0.3, edges: 0x1a4f8a }, // flocon tranchant
     },
     player: { color: 0xff6a00, emissive: 0x7a2a00, edges: 0xffffff },
     finish: 0x2ee6a0,
@@ -166,6 +184,10 @@ export const THEMES: readonly Theme[] = [
       ramp: { shape: 'box', color: 0x8a5a48, emissive: 0xff5a1a, glow: 0.2, edges: 0xffb02e },
       stairs: { shape: 'box', color: 0x7d6a64, emissive: 0xff3d00, glow: 0.15, edges: 0xff7a2a, layers: true }, // lave refroidie
       pyramid: { shape: 'crystal', color: 0xffc21a, emissive: 0xff8800, glow: 0.8 },
+      pit: { shape: 'box', color: 0xff5a00, emissive: 0xff3d00, glow: 1, edges: 0xffd27a }, // bassin de lave
+      beam: { shape: 'box', color: 0x6e625e, emissive: 0xff3d00, glow: 0.1, edges: 0xff8a3d, layers: true }, // arche de basalte
+      pad: { shape: 'disc', color: 0xffe066, emissive: 0xffaa00, glow: 0.9, edges: 0xfff4c0 }, // fumerolle
+      mover: { shape: 'ball', color: 0xff7a1a, emissive: 0xff4400, glow: 0.9, edges: 0xff7a1a }, // bombe de lave
     },
     player: { color: 0x33ddff, emissive: 0x0a6a88, edges: 0xffffff },
     finish: 0x66ff99,

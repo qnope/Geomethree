@@ -28,8 +28,8 @@ describe('parseLevel (profil de côté, obstacles sur toute la largeur)', () => 
 });
 
 describe('types d\'obstacles', () => {
-  it('4 types : mur, rampe, escalier, pyramide', () => {
-    expect([...OBSTACLE_TYPES]).toEqual(['wall', 'ramp', 'stairs', 'pyramid']);
+  it('8 types : mur, rampe, escalier, pyramide, fosse, poutre, tremplin, mobile', () => {
+    expect([...OBSTACLE_TYPES]).toEqual(['wall', 'ramp', 'stairs', 'pyramid', 'pit', 'beam', 'pad', 'mover']);
   });
 });
 
@@ -53,6 +53,37 @@ describe('parseMap (vue de dessus, 5 couloirs)', () => {
       { kind: 'block', type: 'wall', x: 0, y: 0, z0: -2.5, z1: -1.5, h: 3 },
       { kind: 'block', type: 'ramp', x: 1, y: 0, z0: -1.5, z1: -0.5, h: 2 },
     ]);
+  });
+  it('_ est une fosse : mortelle au ras du sol, sur sa seule case', () => {
+    const lvl = parseMap([empty, '..__.', empty, empty, empty]);
+    expect(lvl.obstacles).toEqual([
+      { kind: 'pit', type: 'pit', x: 2, y: 0, z0: -1.5, z1: -0.5, h: 0.05 },
+      { kind: 'pit', type: 'pit', x: 3, y: 0, z0: -1.5, z1: -0.5, h: 0.05 },
+    ]);
+  });
+  it('T est une poutre : bloc suspendu de 1,5 à 3, on passe dessous sans sauter', () => {
+    const lvl = parseMap([empty, empty, '.T...', empty, empty]);
+    expect(lvl.obstacles).toEqual([{ kind: 'block', type: 'beam', x: 1, y: 1.5, z0: -0.5, z1: 0.5, h: 1.5 }]);
+  });
+  it('* est un tremplin, posé à plat sur la piste', () => {
+    const lvl = parseMap([empty, empty, empty, empty, '...*.']);
+    expect(lvl.obstacles).toEqual([{ kind: 'pad', type: 'pad', x: 3, y: 0, z0: 1.5, z1: 2.5, h: 0.3 }]);
+  });
+  it('o est un mobile : il va et vient sur son rail ~, et part de la case o', () => {
+    const lvl = parseMap(['.~...', '.o...', '.~...', empty, empty]);
+    expect(lvl.obstacles).toEqual([{ kind: 'mover', type: 'mover', x: 1, y: 0, z0: -2.5, z1: 0.5, h: 1, start: -1.5 }]);
+  });
+  it('un mobile sans rail reste sur sa case', () => {
+    const lvl = parseMap([empty, empty, empty, '..o..', empty]);
+    expect(lvl.obstacles).toEqual([{ kind: 'mover', type: 'mover', x: 2, y: 0, z0: 0.5, z1: 1.5, h: 1, start: 0.5 }]);
+  });
+  it('deux rails séparés dans une même colonne font deux mobiles', () => {
+    const lvl = parseMap(['o....', '~....', empty, '~....', 'o....']);
+    expect(lvl.obstacles.map((o) => [o.z0, o.z1, o.start])).toEqual([[-2.5, -0.5, -2.5], [0.5, 2.5, 1.5]]);
+  });
+  it('refuse un rail sans mobile ou avec deux mobiles', () => {
+    expect(() => parseMap(['~....', '~....', empty, empty, empty])).toThrow(/rail/);
+    expect(() => parseMap(['o....', '~....', 'o....', empty, empty])).toThrow(/rail/);
   });
   it('calcule la longueur et trie par x', () => {
     const lvl = parseMap(['....#', '..^..', empty, '#....', empty]);
