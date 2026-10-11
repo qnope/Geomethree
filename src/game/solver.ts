@@ -10,6 +10,8 @@ const STEERS: readonly (-1 | 0 | 1)[] = [0, 1, -1];
  * Cherche un enchaînement de décisions qui termine le niveau (DFS sur les instants où le
  * cube est au sol, avec mémoïsation des impasses). Retourne le plan, ou null si le niveau
  * est impossible pour ce solveur. Sert aux tests : garantit que chaque niveau livré est faisable.
+ * `decisionEvery` : nombre minimal de pas (1/240 s) entre deux décisions, à n'importe quel instant,
+ * pour imiter un joueur qui ne peut pas agir plus vite que ça.
  */
 export function solve(level: Level, decisionEvery = 6): Decision[] | null {
   const failed = new Set<string>();
@@ -27,7 +29,7 @@ export function solve(level: Level, decisionEvery = 6): Decision[] | null {
         let s = step;
         game.step(jump, steer);
         s++;
-        while (game.status === 'running' && (!p.grounded || s % decisionEvery !== 0)) {
+        while (game.status === 'running' && (!p.grounded || s - step < decisionEvery)) {
           game.step(false, steer);
           s++;
         }

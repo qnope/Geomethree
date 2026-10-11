@@ -77,7 +77,7 @@ const sequence = (gap: number, ...list: Segment[]): Level =>
 /** `theme` : décor du niveau (cf. render/themes.ts), interchangeable sans toucher aux obstacles. */
 export interface LevelDef { name: string; theme: ThemeId; level: Level }
 
-// Le temps libre entre deux défis est le « temps de réaction » : 10 s au niveau 1, 2,5 s au dernier
+// Le temps libre entre deux défis est le « temps de réaction » : 10 s au niveau 1, 2,5 s au niveau 5
 // (cf. reaction.ts). À 7 u/s : 70, 57, 44, 31 et 18 colonnes (arrondies au-dessus de la cible).
 export const LEVELS: readonly LevelDef[] = [
   { name: 'Échauffement', theme: 'neon', level: sequence(70, spike, spikes3, wall(3), wall(0), spikeLine) },
@@ -94,6 +94,48 @@ export const LEVELS: readonly LevelDef[] = [
     level: sequence(
       18, wall(0), wall(3), wall(1), stairs, tunnel, platform, wall(3), wall(0), spikeLine, stairs,
       wall(2), tunnel, platform, wall(0), wall(3), stairs, spikeLine, wall(1), tunnel, wall(2),
+    ),
+  },
+  // Niveaux 6 à 10 : de 2,2 s à 1 s de temps de réaction, soit 16, 14, 12, 10 et 7 colonnes.
+  {
+    name: 'Sprint',
+    theme: 'neon',
+    level: sequence(
+      16, wall(2), wall(0), spikeLine, wall(3), stairs, wall(1), platform, wall(3), tunnel,
+      spikes3, wall(0), stairs, wall(2), spikeLine,
+    ),
+  },
+  {
+    name: 'Rafale',
+    theme: 'foret',
+    level: sequence(
+      14, wall(0), wall(3), spikeLine, wall(1), tunnel, wall(2), stairs, wall(0), platform, wall(3),
+      spikeLine, wall(1), tunnel, wall(2), stairs, wall(0),
+    ),
+  },
+  {
+    name: 'Tempête',
+    theme: 'dunes',
+    level: sequence(
+      12, wall(3), wall(0), wall(2), spikeLine, stairs, wall(1), tunnel, wall(3), platform, spikeLine,
+      wall(0), wall(2), stairs, wall(1), tunnel, wall(3), spikes3, wall(0),
+    ),
+  },
+  {
+    name: 'Vertige',
+    theme: 'glacier',
+    level: sequence(
+      10, wall(1), wall(3), wall(0), spikeLine, wall(2), stairs, wall(0), tunnel, wall(3), platform,
+      wall(1), spikeLine, wall(3), stairs, wall(0), tunnel, wall(2), spikeLine, wall(1), wall(3),
+    ),
+  },
+  {
+    name: 'Ultime',
+    theme: 'volcan',
+    level: sequence(
+      7, wall(0), wall(3), wall(1), spikeLine, wall(2), stairs, wall(0), tunnel, wall(3), platform,
+      wall(1), spikeLine, wall(3), wall(0), stairs, wall(2), tunnel, wall(0), spikeLine, wall(3),
+      platform, wall(1), wall(2),
     ),
   },
 ];

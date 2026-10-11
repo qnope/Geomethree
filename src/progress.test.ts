@@ -61,4 +61,10 @@ describe('progress', () => {
     expect(loadProgress(broken, 2)).toEqual(emptyProgress(2));
     expect(() => saveProgress(broken, emptyProgress(2))).not.toThrow();
   });
+  it('débloque un niveau ajouté après le dernier niveau déjà terminé', () => {
+    const st = memory({ 'geomethree.progress.v1': JSON.stringify({ unlocked: 4, best: [1, 1, 1, 1, 1] }) });
+    expect(loadProgress(st, 10).unlocked).toBe(5);
+    const st2 = memory({ 'geomethree.progress.v1': JSON.stringify({ unlocked: 4, best: [1, 1, 1, 1, 0.5] }) });
+    expect(loadProgress(st2, 10).unlocked).toBe(4);
+  });
 });
