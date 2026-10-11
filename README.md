@@ -7,7 +7,7 @@ Vite + TypeScript + Three.js + Vitest.
 - `npm run build:single` : un seul fichier HTML (Three.js depuis le CDN), utilisé pour l'Artifact
 
 Logique pure et testée dans `src/game/` (pas fixe 240 Hz, zéro allocation par pas),
-rendu dans `src/render/scene.ts` (InstancedMesh, 12 à 13 draw calls avec le décor).
+rendu dans `src/render/scene.ts` (InstancedMesh, 12 à 19 draw calls avec le décor selon les types d'obstacles du niveau).
 
 ## Contrôles
 
@@ -17,7 +17,11 @@ rendu dans `src/render/scene.ts` (InstancedMesh, 12 à 13 draw calls avec le dé
 
 ## Niveaux
 
-`src/game/levels.ts` : cartes vues de dessus, 5 lignes = 5 couloirs (haut = gauche), `.` vide. Un test (`solver.test.ts`) prouve que chaque niveau est faisable.
+`src/game/levels.ts` : cartes vues de dessus, 5 lignes = 5 couloirs (haut = gauche), `.` vide. Un test (`levels.test.ts`) prouve
+avec le solveur que chaque niveau est faisable, y compris en ne décidant que toutes les 0,15 s.
+
+Les types d'obstacles arrivent peu à peu : pyramides, murs et fosses au niveau 1, puis portes sous poutre et rampes (2),
+tremplins (3), escaliers (4) et mobiles (5) ; les niveaux 6 à 10 les mêlent tous.
 
 ## Obstacles
 
@@ -30,10 +34,18 @@ le dessine à sa façon : un même niveau se joue à l'identique dans n'importe 
 | `=` | rampe | bloc de 2 de haut, on roule dessus | cube | planches | terre cuite | bloc bleu | dalle de lave |
 | `#`, `1`…`9` | escalier | marche de 1 (ou du chiffre) de haut | cubes empilés | pierres moussues | calcaire | blocs de glace | lave refroidie |
 | `^` | pyramide | pic mortel de 1 de haut | pyramide | ronces | obsidienne | cristal | cristal |
+| `_` | fosse | mortelle quand le centre du cube y passe au sol : on la saute ou on la contourne | trou bordé de cyan | mare | sables mouvants | crevasse | bassin de lave |
+| `T` | poutre | bloc suspendu de 1,5 à 3 : on passe dessous, un saut s'y cogne, trop haute pour atterrir dessus | barre laser | branche couchée | tronc de palmier | pont de glace | arche de basalte |
+| `*` | tremplin | propulse à 5 de haut le cube qui y passe au sol : de quoi passer un mur | rampe jaune | champignon | rampe turquoise | rampe d'aurore | fumerolle |
+| `o`, `~` | mobile | pic qui va et vient sur son rail `~` (même colonne) à 2,5 couloirs/s ; `o` : sa case quand le cube arrive | scie | rondin | virevoltant | flocon tranchant | bombe de lave |
 
+- Fosses voisines fondues en une seule : seul leur contour est tracé. Le rail d'un mobile est tracé sur la piste.
+- Mobile : sa position ne dépend que de celle du cube (`moverZ` dans `src/game/game.ts`), qui avance à vitesse
+  constante. La partie reste déterministe, le solveur la prouve et le rendu montre exactement ce que la simulation teste.
 - Rendu (`src/render/obstacles.ts`) : chaque forme est dessinée dans une case unité puis étirée à la taille de
-  l'obstacle, sans jamais déborder de sa collision (un test le vérifie pour chaque décor). Un maillage instancié par
-  type présent dans le niveau et une seule géométrie pour toutes les arêtes : au plus 5 draw calls.
+  l'obstacle, sans jamais déborder de sa collision (un test le vérifie pour chaque décor, mobiles compris à plusieurs
+  instants). Un maillage instancié par type présent dans le niveau et une seule géométrie pour toutes les arêtes :
+  au plus 9 draw calls. Les mobiles roulent sur eux-mêmes : leurs matrices sont recalculées à chaque frame sans allocation.
 - Ajouter un type : son nom dans `OBSTACLE_TYPES` et son caractère dans `CELLS` (`src/game/level.ts`), puis son
   habillage dans chaque décor (`obstacles` dans `src/render/themes.ts`) ; les tests signalent un décor oublié.
 - Ajouter une forme : une entrée dans `OBSTACLE_SHAPES` (`themes.ts`) et sa construction dans `SHAPES` (`obstacles.ts`).
