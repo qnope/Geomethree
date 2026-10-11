@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Game } from '../game/game';
+import { TRACK_HALF } from '../game/level';
 import { rollPose, type RollPose } from '../game/roll';
 
 const PIECES = 12;
@@ -28,33 +29,41 @@ export class GameScene {
     sun.position.set(-4, 10, 8);
     this.scene.add(sun);
 
-    // Sol : un seul plan + grille.
+    // Sol : un plan large (hors piste), la piste, ses couloirs et ses rails. 4 draw calls au total.
     const len = game.level.length + 80;
+    const x0 = -20, x1 = len - 20, cx = len / 2 - 20;
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(len, 40),
       new THREE.MeshStandardMaterial({ color: 0x120c30, roughness: 0.9 }),
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(len / 2 - 20, 0, 0);
+    ground.position.set(cx, 0, 0);
     this.scene.add(ground);
-    // Grille construite à la main (1 draw call) : traverses tous les 2 u, rails tous les 2 u en z.
-    const x0 = -20, x1 = len - 20, pts: number[] = [];
-    for (let gx = x0; gx <= x1; gx += 2) pts.push(gx, 0, -20, gx, 0, 20);
-    for (let gz = -20; gz <= 20; gz += 2) pts.push(x0, 0, gz, x1, 0, gz);
+
+    const track = new THREE.Mesh(
+      new THREE.PlaneGeometry(len, TRACK_HALF * 2),
+      new THREE.MeshBasicMaterial({ color: 0x241567 }),
+    );
+    track.rotation.x = -Math.PI / 2;
+    track.position.set(cx, 0.01, 0); // un peu au-dessus du sol pour éviter le z-fighting en vue rasante
+    this.scene.add(track);
+
+    // Traverses tous les 2 u (sur la piste), lignes de couloir, rails lumineux.
+    const pts: number[] = [];
+    for (let gx = x0; gx <= x1; gx += 2) pts.push(gx, 0, -TRACK_HALF, gx, 0, TRACK_HALF);
+    for (let gz = -TRACK_HALF + 1; gz < TRACK_HALF; gz += 1) pts.push(x0, 0, gz, x1, 0, gz);
     const gridGeo = new THREE.BufferGeometry();
     gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
     const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0x4a2fd0 }));
     grid.position.y = 0.02;
     this.scene.add(grid);
 
-    // Piste lumineuse sous la trajectoire du cube, pour lire la profondeur.
-    const track = new THREE.Mesh(
-      new THREE.PlaneGeometry(len, 1.6),
-      new THREE.MeshBasicMaterial({ color: 0x2b1a7a }),
-    );
-    track.rotation.x = -Math.PI / 2;
-    track.position.set(len / 2 - 20, 0.01, 0); // assez haut pour éviter le z-fighting en vue rasante
-    this.scene.add(track);
+    const railGeo = new THREE.BufferGeometry();
+    railGeo.setAttribute('position', new THREE.Float32BufferAttribute(
+      [x0, 0, -TRACK_HALF, x1, 0, -TRACK_HALF, x0, 0, TRACK_HALF, x1, 0, TRACK_HALF], 3));
+    const rails = new THREE.LineSegments(railGeo, new THREE.LineBasicMaterial({ color: 0x33ddff }));
+    rails.position.y = 0.03;
+    this.scene.add(rails);
 
     // Joueur.
     const pGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -75,10 +84,12 @@ export class GameScene {
       blocks.length,
     );
     blocks.forEach((b, i) => {
-      this.tmp.position.set(b.x + 0.5, b.y + 0.5, 0);
+      this.tmp.position.set(b.x + 0.5, b.y + b.h / 2, (b.z0 + b.z1) / 2);
+      this.tmp.scale.set(1, b.h, b.z1 - b.z0);
       this.tmp.updateMatrix();
       blockMesh.setMatrixAt(i, this.tmp.matrix);
     });
+    this.tmp.scale.set(1, 1, 1);
     const spikeGeo = new THREE.ConeGeometry(0.5, 1, 4);
     spikeGeo.rotateY(Math.PI / 4);
     const spikeMesh = new THREE.InstancedMesh(
@@ -87,7 +98,7 @@ export class GameScene {
       spikes.length,
     );
     spikes.forEach((s, i) => {
-      this.tmp.position.set(s.x + 0.5, s.y + 0.5, 0);
+      this.tmp.position.set(s.x + 0.5, s.y + 0.5, (s.z0 + s.z1) / 2);
       this.tmp.updateMatrix();
       spikeMesh.setMatrixAt(i, this.tmp.matrix);
     });
@@ -98,8 +109,8 @@ export class GameScene {
       for (let v = 0; v < edge.count; v++) {
         const k = (i * edge.count + v) * 3;
         edgePts[k] = edge.getX(v) + b.x + 0.5;
-        edgePts[k + 1] = edge.getY(v) + b.y + 0.5;
-        edgePts[k + 2] = edge.getZ(v);
+        edgePts[k + 1] = edge.getY(v) * b.h + b.y + b.h / 2;
+        edgePts[k + 2] = edge.getZ(v) * (b.z1 - b.z0) + (b.z0 + b.z1) / 2;
       }
     });
     const edgeGeo = new THREE.BufferGeometry();
@@ -109,7 +120,7 @@ export class GameScene {
 
     // Ligne d'arrivée.
     const finish = new THREE.Mesh(
-      new THREE.PlaneGeometry(8, 8),
+      new THREE.PlaneGeometry(TRACK_HALF * 2, 8),
       new THREE.MeshBasicMaterial({ color: 0x66ff99, transparent: true, opacity: 0.35, side: THREE.DoubleSide }),
     );
     finish.rotation.y = -Math.PI / 2; // face à la caméra
@@ -145,7 +156,7 @@ export class GameScene {
     for (let i = 0; i < PIECES; i++) {
       this.piecePos[i * 3] = p.x + 0.5;
       this.piecePos[i * 3 + 1] = p.y + 0.5;
-      this.piecePos[i * 3 + 2] = 0;
+      this.piecePos[i * 3 + 2] = p.z;
       this.pieceVel[i * 3] = (Math.random() - 0.7) * 8;
       this.pieceVel[i * 3 + 1] = Math.random() * 10 + 2;
       this.pieceVel[i * 3 + 2] = (Math.random() - 0.5) * 8;
@@ -163,12 +174,13 @@ export class GameScene {
     const a = g.status === 'running' ? g.alpha : 1;
     const x = p.prevX + (p.x - p.prevX) * a;
     const y = p.prevY + (p.y - p.prevY) * a;
+    const z = p.prevZ + (p.z - p.prevZ) * a;
 
     // Roulade physique : l'angle suit la distance (1 tour = 4 cases), au sol comme en l'air.
     // Au sol, le cube pivote sur son arête avant ; en l'air, il tourne autour de son centre.
     const pose = rollPose(x, this.pose);
-    if (p.grounded) this.player.position.set(pose.cx, y + pose.cy, 0);
-    else this.player.position.set(x + 0.5, y + 0.5, 0);
+    if (p.grounded) this.player.position.set(pose.cx, y + pose.cy, z);
+    else this.player.position.set(x + 0.5, y + 0.5, z);
     this.player.rotation.z = pose.angle;
 
     if (this.deathT >= 0) {
@@ -189,10 +201,11 @@ export class GameScene {
 
     // Caméra derrière le cube, légèrement au-dessus : on fonce vers les obstacles.
     const cam = this.camera;
-    cam.position.x = x - 5;
-    cam.position.y += (y + 3.8 - cam.position.y) * Math.min(1, dt * 5);
-    cam.position.z = 0;
-    cam.lookAt(x + 12, cam.position.y - 3.2, 0);
+    cam.position.x = x - 6;
+    cam.position.y += (y + 4.4 - cam.position.y) * Math.min(1, dt * 5);
+    // La caméra suit le cube latéralement, mais à moitié : on sent le déplacement sans perdre la piste.
+    cam.position.z += (z * 0.85 - cam.position.z) * Math.min(1, dt * 8);
+    cam.lookAt(x + 12, cam.position.y - 3.6, cam.position.z);
 
     // Fond qui pulse lentement.
     this.bg.setHSL(0.7 + Math.sin(time * 0.15) * 0.06, 0.7, 0.015);

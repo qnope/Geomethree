@@ -1,14 +1,22 @@
 import { describe, it, expect } from 'vitest';
-import { overlaps } from './collision';
+import { overlaps, type Box } from './collision';
 
-describe('overlaps (AABB)', () => {
+const box = (x: number, y: number, z: number, w = 1, h = 1, d = 1): Box => ({ x, y, z, w, h, d });
+
+describe('overlaps (AABB 3D)', () => {
   it('détecte deux boîtes qui se chevauchent', () => {
-    expect(overlaps({ x: 0, y: 0, w: 1, h: 1 }, { x: 0.5, y: 0.5, w: 1, h: 1 })).toBe(true);
+    expect(overlaps(box(0, 0, 0), box(0.5, 0.5, 0.5))).toBe(true);
   });
   it('ne compte pas un simple contact de bord', () => {
-    expect(overlaps({ x: 0, y: 0, w: 1, h: 1 }, { x: 1, y: 0, w: 1, h: 1 })).toBe(false);
+    expect(overlaps(box(0, 0, 0), box(1, 0, 0))).toBe(false);
+    expect(overlaps(box(0, 0, 0), box(0, 1, 0))).toBe(false);
+    expect(overlaps(box(0, 0, 0), box(0, 0, 1))).toBe(false);
   });
-  it('rejette des boîtes séparées', () => {
-    expect(overlaps({ x: 0, y: 0, w: 1, h: 1 }, { x: 3, y: 0, w: 1, h: 1 })).toBe(false);
+  it('rejette des boîtes séparées sur un seul axe', () => {
+    expect(overlaps(box(0, 0, 0), box(3, 0, 0))).toBe(false);
+    expect(overlaps(box(0, 0, 0), box(0, 0, 3))).toBe(false);
+  });
+  it('gère des boîtes de tailles différentes', () => {
+    expect(overlaps(box(0, 0, 0, 5, 5, 5), box(2, 2, 2, 0.1, 0.1, 0.1))).toBe(true);
   });
 });
