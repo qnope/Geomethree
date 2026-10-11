@@ -19,6 +19,14 @@
     #bl { left: 16px; } #br { right: 16px; }
     #bl.on, #br.on { background: rgba(51,221,255,.32); }
     #msg { position: absolute; top: 42%; width: 100%; text-align: center; font-size: 28px; text-shadow: 0 0 12px #f3c; }
+    #menu { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(11,8,32,.86); pointer-events: auto; overflow-y: auto; padding: 16px; box-sizing: border-box; }
+    #menu h1 { margin: 0 0 4px; font-size: 30px; text-shadow: 0 0 12px #f3c; }
+    #menu p { margin: 0 0 8px; opacity: .8; text-align: center; font-weight: 500; }
+    #menu button { width: min(86vw, 360px); display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-radius: 14px; border: 2px solid rgba(51,221,255,.55); background: rgba(51,221,255,.12); color: #fff; font: 600 17px system-ui, sans-serif; }
+    #menu button:disabled { opacity: .35; border-color: rgba(255,255,255,.2); }
+    #menu button small { opacity: .8; font-weight: 500; }
+    #menu button.done { border-color: #66ff99; }
+    #menubtn { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 16px; pointer-events: auto; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.35); color: #fff; font: 600 14px system-ui, sans-serif; }
     #msg small { display: block; font-size: 15px; opacity: .8; margin-top: 6px; }
   </style>
 </head>
@@ -30,7 +38,13 @@
     <div id="perf"></div>
     <div id="steer"><i id="dot"></i></div>
     <div id="bl">◀</div><div id="br">▶</div>
-    <div id="msg">Geomethree<small>Touche l'écran pour commencer<br>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter<br>Ordinateur : flèches ← → et Espace</small></div>
+    <div id="msg"></div>
+    <button id="menubtn">☰ Niveaux</button>
+    <div id="menu">
+      <h1>Geomethree</h1>
+      <p>Incline le téléphone pour aller à gauche ou à droite, touche l'écran pour sauter.<br>Ordinateur : flèches ← → et Espace</p>
+      <div id="levels" style="display:contents"></div>
+    </div>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
