@@ -13,7 +13,7 @@ const $ = (id: string) => document.getElementById(id)!;
 const fill = $('fill'), pct = $('pct'), att = $('att'), perf = $('perf'), msg = $('msg');
 const dot = $('dot'), btnL = $('bl'), btnR = $('br'), menu = $('menu'), levelList = $('levels'), menuBtn = $('menubtn');
 const decorPick = $('decor') as HTMLSelectElement;
-const soundBtn = $('sndbtn');
+const settings = $('settings'), optMusic = $('optmusic') as HTMLInputElement, optSfx = $('optsfx') as HTMLInputElement;
 
 const storage = (() => { try { return window.localStorage; } catch { return null; } })();
 const progress = storage ? loadProgress(storage, LEVELS.length) : loadProgress({ getItem: () => null, setItem: () => {} }, LEVELS.length);
@@ -101,14 +101,17 @@ for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as
   window.addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
 }
 document.addEventListener('visibilitychange', () => sound.setHidden(document.hidden));
-const showSound = () => {
-  soundBtn.textContent = sound.muted ? '🔇' : '🔊';
-  soundBtn.setAttribute('aria-label', sound.muted ? 'Remettre le son' : 'Couper le son');
-};
-const toggleSound = () => { sound.toggleMute(); showSound(); };
-soundBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-soundBtn.addEventListener('click', toggleSound);
-showSound();
+
+// Menu Réglages (depuis le menu des niveaux) : ambiance et effets sonores, mémorisés.
+optMusic.checked = sound.music;
+optSfx.checked = sound.effects;
+// Au clic plutôt qu'au change : on reste dans le geste de l'utilisateur, qu'iOS exige pour démarrer le son.
+optMusic.addEventListener('click', () => sound.set({ music: optMusic.checked }));
+optSfx.addEventListener('click', () => sound.set({ effects: optSfx.checked }));
+const settingsOpen = () => settings.style.display === 'flex';
+const showSettings = (open: boolean) => { settings.style.display = open ? 'flex' : 'none'; };
+$('setbtn').addEventListener('click', () => showSettings(true));
+$('setback').addEventListener('click', () => showSettings(false));
 
 // Les boutons à l'écran (secours sans capteur) ne déclenchent pas de saut.
 for (const [el, side] of [[btnL, 'left'], [btnR, 'right']] as const) {
@@ -133,7 +136,7 @@ window.addEventListener('pointerdown', (e) => {
 window.addEventListener('pointerup', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('pointercancel', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyM') toggleSound();
+  if (settingsOpen()) { if (e.code === 'Escape') showSettings(false); return; }
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ' || e.code === 'Enter') {
     if (!started) void play(progress.unlocked);
     else if (game.status === 'won' && endT > 0.8) next();
@@ -200,7 +203,8 @@ function frame(now: number) {
       `${stats.fps.toFixed(0)} FPS  ${stats.avgMs.toFixed(1)} ms (pire ${stats.worstMs.toFixed(1)})\n` +
       `CPU ${cpuMs.toFixed(2)} ms  draw ${info.calls}  tri ${info.triangles}\n` +
       `direction ${controls.tiltActive ? 'inclinaison' : 'clavier/boutons'} ${steer.toFixed(2)}\n` +
-      `son ${sound.muted ? 'coupé' : sound.renderMs ? `rendu en ${sound.renderMs.toFixed(0)} ms (worker)` : 'en préparation'}`;
+      `son ${!sound.music && !sound.effects ? 'coupé' : sound.renderMs ? `rendu en ${sound.renderMs.toFixed(0)} ms (worker)` : 'en préparation'}` +
+      (sound.music || !sound.effects ? '' : ', ambiance coupée');
   }
   requestAnimationFrame(frame);
 }

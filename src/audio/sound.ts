@@ -4,11 +4,14 @@ import type { RenderedSoundscape, Stereo } from './synth';
 
 export type Sfx = 'jump' | 'crash' | 'win';
 
+/** Réglages du son (menu Réglages), mémorisés. */
+export interface SoundSettings { music: boolean; effects: boolean }
+
 export interface SoundDeps {
   /** Appelé au premier geste seulement (iOS refuse de jouer un contexte créé hors d'un geste). */
   createContext: () => AudioContext;
-  /** Rendu d'une ambiance (dans un worker en vrai, cf. `renderer.ts`). */
-  render: (id: ThemeId) => Promise<RenderedSoundscape>;
+  /** Rendu d'un décor, avec ou sans sa boucle d'ambiance (dans un worker en vrai, cf. `renderer.ts`). */
+  render: (id: ThemeId, withLoop: boolean) => Promise<RenderedSoundscape>;
   storage?: StorageLike | null;
 }
 
@@ -16,23 +19,33 @@ const KEY = 'geomethree.sound.v1';
 /** Volumes : l'ambiance reste en retrait des effets. */
 const MUSIC = 0.55;
 const SFX: Record<Sfx, number> = { jump: 0.18, crash: 0.6, win: 0.7 };
-/** Fondu enchaîné entre deux décors (s). */
+/** Fondu enchaîné entre deux décors, et fondu de sortie quand on coupe l'ambiance (s). */
 const FADE = 1.2;
-/** Décors gardés en mémoire : environ 3 Mo chacun. */
+const FADE_OUT = 0.3;
+/** Décors gardés en mémoire : environ 3 Mo chacun avec l'ambiance. */
 const KEEP = 2;
 
-type Buffers = Record<'loop' | Sfx, AudioBuffer>;
-interface Entry { data?: RenderedSoundscape; buffers?: Buffers }
+type Buffers = { loop?: AudioBuffer } & Record<Sfx, AudioBuffer>;
+interface Entry { withLoop: boolean; data?: RenderedSoundscape; buffers?: Buffers }
+
+function loadSettings(storage: StorageLike | null | undefined): SoundSettings {
+  try {
+    const d = JSON.parse(storage?.getItem(KEY) ?? '{}') as Partial<SoundSettings>;
+    return { music: d.music !== false, effects: d.effects !== false };
+  } catch {
+    return { music: true, effects: true };
+  }
+}
 
 /**
  * Son du jeu : une boucle d'ambiance par décor (fondu enchaîné au changement) et trois effets.
- * Rien n'est créé avant le premier geste ; son coupé ou onglet masqué, le contexte est suspendu
- * (plus aucun calcul audio) et le choix « muet » est mémorisé.
+ * Rien n'est créé avant le premier geste. Ambiance coupée : on ne calcule même pas sa boucle.
+ * Tout coupé ou onglet masqué : le contexte est suspendu, plus aucun calcul audio.
  */
 export class Sound {
-  muted: boolean;
-  /** Durée du dernier rendu d'ambiance (ms), pour l'affichage des performances. */
+  /** Durée du dernier rendu (ms), pour l'affichage des performances. */
   renderMs = 0;
+  private readonly settings: SoundSettings;
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private broken = false;
@@ -43,8 +56,12 @@ export class Sound {
   private suspendTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly deps: SoundDeps) {
-    this.muted = deps.storage?.getItem(KEY) === '1';
+    this.settings = loadSettings(deps.storage);
   }
+
+  get music(): boolean { return this.settings.music; }
+  get effects(): boolean { return this.settings.effects; }
+  private get active(): boolean { return this.settings.music || this.settings.effects; }
 
   /** Décor courant : lance son rendu tout de suite (même avant le premier geste) et l'ambiance dès que possible. */
   setTheme(id: ThemeId): void {
@@ -56,7 +73,7 @@ export class Sound {
 
   /** À appeler dans chaque geste (toucher, clic, touche) : crée ou reprend le contexte. Ne coûte presque rien ensuite. */
   unlock(): void {
-    if (this.muted || this.broken) return;
+    if (!this.active || this.broken) return;
     if (!this.ctx) {
       try {
         this.ctx = this.deps.createContext();
@@ -77,7 +94,7 @@ export class Sound {
   }
 
   play(sfx: Sfx): void {
-    if (this.muted || !this.ctx || !this.master || this.ctx.state !== 'running' || !this.theme) return;
+    if (!this.settings.effects || !this.ctx || !this.master || this.ctx.state !== 'running' || !this.theme) return;
     const b = this.buffers(this.theme);
     if (!b) return;
     const src = this.ctx.createBufferSource();
@@ -89,26 +106,26 @@ export class Sound {
     src.start();
   }
 
-  /** Coupe ou remet le son (dans un clic : peut démarrer le contexte). Retourne le nouvel état. */
-  toggleMute(): boolean {
-    this.muted = !this.muted;
-    try { this.deps.storage?.setItem(KEY, this.muted ? '1' : '0'); } catch { /* stockage bloqué : tant pis */ }
+  /** Change les réglages (depuis un clic du menu Réglages : peut démarrer le contexte) et les mémorise. */
+  set(change: Partial<SoundSettings>): void {
+    Object.assign(this.settings, change);
+    try { this.deps.storage?.setItem(KEY, JSON.stringify(this.settings)); } catch { /* stockage bloqué : tant pis */ }
     clearTimeout(this.suspendTimer);
+    if (!this.settings.music) this.stopLoop();
     const ctx = this.ctx, master = this.master;
-    if (this.muted) {
+    if (!this.active) {
       if (ctx && master) {
         master.gain.setTargetAtTime(0, ctx.currentTime, 0.03);
-        this.suspendTimer = setTimeout(() => { if (this.muted) ctx.suspend().catch(() => {}); }, 200);
+        this.suspendTimer = setTimeout(() => { if (!this.active) ctx.suspend().catch(() => {}); }, 200);
       }
-    } else {
-      if (ctx && master) {
-        master.gain.cancelScheduledValues(ctx.currentTime);
-        master.gain.setTargetAtTime(1, ctx.currentTime, 0.03);
-      }
-      if (this.theme) this.load(this.theme);
-      this.unlock();
+      return;
     }
-    return this.muted;
+    if (ctx && master) {
+      master.gain.cancelScheduledValues(ctx.currentTime);
+      master.gain.setTargetAtTime(1, ctx.currentTime, 0.03);
+    }
+    if (this.theme) this.load(this.theme);
+    this.unlock();
   }
 
   /** Onglet ou application en arrière-plan : on suspend tout. */
@@ -116,22 +133,25 @@ export class Sound {
     this.hidden = hidden;
     if (!this.ctx) return;
     if (hidden) this.ctx.suspend().catch(() => {});
-    else if (!this.muted) this.ctx.resume().catch(() => {});
+    else if (this.active) this.ctx.resume().catch(() => {});
   }
 
+  /** Lance le rendu du décor si rien d'utilisable n'est en mémoire (sans la boucle si l'ambiance est coupée). */
   private load(id: ThemeId): void {
-    if (this.muted) return;
+    if (!this.active) return;
+    const withLoop = this.settings.music;
     const known = this.cache.get(id);
     this.cache.delete(id); // réinsertion : le plus récent en dernier
-    if (known) { this.cache.set(id, known); return; }
-    const entry: Entry = {};
+    if (known && (known.withLoop || !withLoop)) { this.cache.set(id, known); return; }
+    const entry: Entry = { withLoop };
     this.cache.set(id, entry);
     for (const old of this.cache.keys()) {
       if (this.cache.size <= KEEP) break;
       if (old !== id && old !== this.playing?.theme) this.cache.delete(old);
     }
-    this.deps.render(id).then((data) => {
-      if (this.cache.get(id) !== entry) return; // oublié entre-temps
+    this.deps.render(id, withLoop).then((data) => {
+      if (this.cache.get(id) !== entry) return; // oublié ou remplacé entre-temps
+      if (!entry.withLoop) data.loop = undefined; // ambiance coupée pendant le rendu
       entry.data = data;
       if (id === this.theme) this.startLoop();
     }).catch(() => { if (this.cache.get(id) === entry) this.cache.delete(id); });
@@ -149,7 +169,8 @@ export class Sound {
         b.getChannelData(1).set(s.right);
         return b;
       };
-      e.buffers = { loop: toBuffer(data.loop), jump: toBuffer(data.jump), crash: toBuffer(data.crash), win: toBuffer(data.win) };
+      e.buffers = { jump: toBuffer(data.jump), crash: toBuffer(data.crash), win: toBuffer(data.win) };
+      if (data.loop) e.buffers.loop = toBuffer(data.loop);
       e.data = undefined;
       this.renderMs = data.ms ?? this.renderMs;
     }
@@ -158,20 +179,14 @@ export class Sound {
 
   private startLoop(): void {
     const ctx = this.ctx, master = this.master, theme = this.theme;
-    if (!ctx || !master || this.muted || !theme || this.playing?.theme === theme) return;
-    const b = this.buffers(theme);
-    if (!b) return;
+    if (!ctx || !master || !this.settings.music || !theme || this.playing?.theme === theme) return;
+    const loop = this.buffers(theme)?.loop;
+    if (!loop) return;
     const now = ctx.currentTime;
-    if (this.playing) {
-      const { src, gain } = this.playing;
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setValueAtTime(gain.gain.value, now);
-      gain.gain.linearRampToValueAtTime(0, now + FADE);
-      src.stop(now + FADE + 0.05);
-    }
+    this.fadeOut(FADE);
     const src = ctx.createBufferSource();
     const gain = ctx.createGain();
-    src.buffer = b.loop;
+    src.buffer = loop;
     src.loop = true;
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(MUSIC, now + FADE);
@@ -179,5 +194,25 @@ export class Sound {
     gain.connect(master);
     src.start(now);
     this.playing = { theme, src, gain };
+  }
+
+  /** Ambiance coupée : fondu de sortie, puis on libère les boucles (≈ 3 Mo chacune). */
+  private stopLoop(): void {
+    this.fadeOut(FADE_OUT);
+    this.playing = null;
+    for (const e of this.cache.values()) {
+      e.withLoop = false;
+      if (e.buffers) e.buffers.loop = undefined;
+      if (e.data) e.data.loop = undefined;
+    }
+  }
+
+  private fadeOut(seconds: number): void {
+    if (!this.playing || !this.ctx) return;
+    const { src, gain } = this.playing, now = this.ctx.currentTime;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(gain.gain.value, now);
+    gain.gain.linearRampToValueAtTime(0, now + seconds);
+    src.stop(now + seconds + 0.05);
   }
 }

@@ -50,14 +50,14 @@ const stereo = (mark: number, len = 8): Stereo => {
   return { left, right: left.slice() };
 };
 const ids: ThemeId[] = ['neon', 'foret', 'dunes', 'glacier', 'volcan'];
-const fakeRender = (id: ThemeId): RenderedSoundscape => {
+const fakeRender = (id: ThemeId, withLoop = true): RenderedSoundscape => {
   const k = ids.indexOf(id) * 10;
-  return { rate: 22050, loop: stereo(k + 1, 64), jump: stereo(k + 2), crash: stereo(k + 3), win: stereo(k + 4) };
+  return { rate: 22050, ...(withLoop ? { loop: stereo(k + 1, 64) } : {}), jump: stereo(k + 2), crash: stereo(k + 3), win: stereo(k + 4) };
 };
 
 function setup(stored: Record<string, string> = {}) {
   const contexts: FakeContext[] = [];
-  const render = vi.fn(async (id: ThemeId) => fakeRender(id));
+  const render = vi.fn(async (id: ThemeId, withLoop: boolean) => fakeRender(id, withLoop));
   const storage = { data: { ...stored }, getItem(k: string) { return this.data[k] ?? null; }, setItem(k: string, v: string) { this.data[k] = v; } };
   const sound = new Sound({
     createContext: () => { const c = new FakeContext(); contexts.push(c); return c as unknown as AudioContext; },
@@ -79,7 +79,7 @@ describe('Sound', () => {
     sound.setTheme('neon');
     await flush();
     expect(contexts).toHaveLength(0);
-    expect(render).toHaveBeenCalledWith('neon');
+    expect(render).toHaveBeenCalledWith('neon', true);
   });
 
   it('le premier toucher crée le contexte, le reprend et lance l\'ambiance du décor en boucle', async () => {
@@ -147,35 +147,76 @@ describe('Sound', () => {
     expect(render).toHaveBeenCalledTimes(4); // dunes était encore là
   });
 
-  it('couper le son : fondu, contexte suspendu (rien ne tourne), choix mémorisé', async () => {
+  it('réglages : ambiance coupée, la boucle s\'éteint en fondu mais les effets restent', async () => {
+    const { sound, ctx, played, storage, flush } = setup();
+    sound.setTheme('neon');
+    await flush();
+    sound.unlock();
+    sound.set({ music: false });
+    const loop = ctx().sources.find((s) => s.loop)!;
+    expect(loop.stopped).toBeGreaterThan(ctx().currentTime);
+    sound.play('jump');
+    expect(played()).toEqual([1, 2]);
+    expect(JSON.parse(Object.values(storage.data)[0])).toEqual({ music: false, effects: true });
+  });
+
+  it('ambiance coupée : on ne calcule que les effets (pas la boucle de 3 Mo)', async () => {
+    const { sound, render, played, flush } = setup({ 'geomethree.sound.v1': JSON.stringify({ music: false, effects: true }) });
+    sound.setTheme('dunes');
+    sound.unlock();
+    await flush();
+    expect(render).toHaveBeenCalledWith('dunes', false);
+    sound.play('crash');
+    expect(played()).toEqual([23]);
+    sound.set({ music: true }); // l'ambiance revient : on calcule la boucle
+    await flush();
+    expect(render).toHaveBeenLastCalledWith('dunes', true);
+    expect(played()).toEqual([23, 21]);
+  });
+
+  it('réglages : effets coupés, l\'ambiance continue', async () => {
+    const { sound, played, flush } = setup();
+    sound.setTheme('foret');
+    await flush();
+    sound.unlock();
+    sound.set({ effects: false });
+    sound.play('jump');
+    expect(played()).toEqual([11]);
+  });
+
+  it('tout coupé : fondu puis contexte suspendu (plus aucun calcul audio)', async () => {
     vi.useFakeTimers();
-    const { sound, ctx, storage } = setup();
+    const { sound, ctx } = setup();
     sound.setTheme('neon');
     await vi.runAllTimersAsync();
     sound.unlock();
-    expect(sound.toggleMute()).toBe(true);
+    sound.set({ music: false, effects: false });
     await vi.advanceTimersByTimeAsync(500);
     expect(ctx().suspend).toHaveBeenCalled();
     expect(ctx().state).toBe('suspended');
-    expect(Object.values(storage.data)).toContain('1');
-    expect(sound.toggleMute()).toBe(false);
+    sound.set({ effects: true }); // le changement de réglage est un clic : on peut reprendre
     expect(ctx().state).toBe('running');
   });
 
-  it('son coupé mémorisé : ni contexte ni rendu tant qu\'on ne le remet pas', async () => {
+  it('tout coupé et mémorisé : ni contexte ni rendu tant qu\'on ne réactive rien', async () => {
     const first = setup();
-    first.sound.toggleMute();
+    first.sound.set({ music: false, effects: false });
     const { sound, contexts, render, played, flush } = setup(first.storage.data);
-    expect(sound.muted).toBe(true);
+    expect([sound.music, sound.effects]).toEqual([false, false]);
     sound.setTheme('neon');
     sound.unlock();
     sound.play('jump');
     await flush();
     expect(contexts).toHaveLength(0);
     expect(render).not.toHaveBeenCalled();
-    sound.toggleMute(); // le clic sur le bouton est un geste : on peut démarrer
+    sound.set({ music: true });
     await flush();
     expect(played()).toEqual([1]);
+  });
+
+  it('réglages illisibles : tout activé par défaut', () => {
+    const { sound } = setup({ 'geomethree.sound.v1': '{oups' });
+    expect([sound.music, sound.effects]).toEqual([true, true]);
   });
 
   it('onglet en arrière-plan : contexte suspendu, repris au retour', async () => {
@@ -190,8 +231,8 @@ describe('Sound', () => {
   });
 
   it('sans Web Audio (vieux navigateur) : le jeu continue en silence', () => {
-    const sound = new Sound({ createContext: () => { throw new Error('pas de Web Audio'); }, render: async (id) => fakeRender(id) });
+    const sound = new Sound({ createContext: () => { throw new Error('pas de Web Audio'); }, render: async (id, withLoop) => fakeRender(id, withLoop) });
     sound.setTheme('neon');
-    expect(() => { sound.unlock(); sound.play('jump'); sound.toggleMute(); sound.toggleMute(); sound.setHidden(true); }).not.toThrow();
+    expect(() => { sound.unlock(); sound.play('jump'); sound.set({ music: false }); sound.set({ music: true }); sound.setHidden(true); }).not.toThrow();
   });
 });

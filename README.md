@@ -53,5 +53,6 @@ principal et un worker de 5 Ko chargé à part.
   chaque boucle se recolle sans clic, ne sature pas, a le même volume perçu que les autres et ne s'interrompt jamais.
 - `sound.ts` joue le tout avec la Web Audio API : rien n'est créé avant le premier toucher (exigence d'iOS), fondu
   enchaîné au changement de décor, au plus 2 décors gardés en mémoire (≈ 3 Mo chacun).
-- Le bouton 🔊 (ou la touche M) coupe le son ; le choix est mémorisé, et le contexte audio est alors suspendu
+- Menu **Réglages** (depuis le menu des niveaux) : ambiance sonore et effets sonores se désactivent séparément,
+  choix mémorisé. Ambiance coupée, sa boucle n'est même pas calculée ; tout coupé, le contexte audio est suspendu
   (plus aucun calcul), comme quand l'onglet passe en arrière-plan. Sur iPhone, le bouton silencieux coupe aussi le son du jeu.

@@ -55,30 +55,30 @@ describe('renderSoundscape : ambiance en boucle', () => {
     const get = () => out.get(t.id)!.r;
 
     it(`${t.name} : une boucle stéréo de la durée exacte des mesures`, () => {
-      const { loop } = get();
+      const loop = get().loop!;
       const n = Math.round(loopSeconds(SOUNDSCAPES[t.id]) * RATE);
       expect(loop.left.length).toBe(n);
       expect(loop.right.length).toBe(n);
     });
 
     it(`${t.name} : la boucle se recolle sans clic`, () => {
-      const { loop } = get();
+      const loop = get().loop!;
       expect(seam(loop.left)).toBeLessThanOrEqual(1);
       expect(seam(loop.right)).toBeLessThanOrEqual(1);
     });
 
     it(`${t.name} : ne sature jamais`, () => {
-      const { loop } = get();
+      const loop = get().loop!;
       expect(peak(loop.left)).toBeLessThanOrEqual(0.99);
       expect(peak(loop.right)).toBeLessThanOrEqual(0.99);
     });
 
     it(`${t.name} : même volume perçu que les autres décors (-21 dB ± 1)`, () => {
-      expect(Math.abs(loudness(get().loop) + 21)).toBeLessThanOrEqual(1);
+      expect(Math.abs(loudness(get().loop!) + 21)).toBeLessThanOrEqual(1);
     });
 
     it(`${t.name} : l'ambiance ne s'interrompt jamais (aucun quart de seconde à plus de 24 dB sous la moyenne)`, () => {
-      const { left, right } = get().loop;
+      const { left, right } = get().loop!;
       const avg = rms(left);
       const win = Math.round(RATE / 4);
       for (let i = 0; i + win <= left.length; i += win) {
@@ -87,19 +87,19 @@ describe('renderSoundscape : ambiance en boucle', () => {
     });
 
     it(`${t.name} : vraie stéréo (gauche et droite diffèrent)`, () => {
-      const { left, right } = get().loop;
+      const { left, right } = get().loop!;
       let lr = 0, ll = 0, rr = 0;
       for (let i = 0; i < left.length; i++) { lr += left[i] * right[i]; ll += left[i] ** 2; rr += right[i] ** 2; }
       expect(lr / Math.sqrt(ll * rr)).toBeLessThan(0.98);
     });
 
     it(`${t.name} : identique d'un rendu à l'autre (aléa à graine fixe)`, () => {
-      expect(fingerprint(renderSoundscape(SOUNDSCAPES[t.id]).loop)).toBe(fingerprint(get().loop));
+      expect(fingerprint(renderSoundscape(SOUNDSCAPES[t.id]).loop!)).toBe(fingerprint(get().loop!));
     });
 
     it(`${t.name} : budget de rendu (moins de 1,5 s ici, au plus 4 Mo en mémoire)`, () => {
       const { r, ms } = out.get(t.id)!;
-      const bytes = [r.loop, r.jump, r.crash, r.win].reduce((b, s) => b + s.left.byteLength + s.right.byteLength, 0);
+      const bytes = [r.loop!, r.jump, r.crash, r.win].reduce((b, s) => b + s.left.byteLength + s.right.byteLength, 0);
       expect(ms).toBeLessThan(1500);
       expect(bytes).toBeLessThanOrEqual(4 * 1024 * 1024);
     });
@@ -121,5 +121,13 @@ describe('renderSoundscape : effets sonores', () => {
         }
       });
     });
+  });
+});
+
+describe('renderSoundscape sans ambiance (coupée dans les réglages)', () => {
+  it('ne calcule que les effets, les mêmes qu\'avec l\'ambiance', () => {
+    const r = renderSoundscape(SOUNDSCAPES.neon, false);
+    expect(r.loop).toBeUndefined();
+    expect(fingerprint(r.win)).toBe(fingerprint(out.get('neon')!.r.win));
   });
 });
