@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LEVELS } from './levels';
+import { OBSTACLE_TYPES } from './level';
 import { solve, replay } from './solver';
 import { reactionTime, reactionTarget, reactionGaps, challenges, REACTION_CALM, REACTION_STRESS } from './reaction';
 
@@ -9,16 +10,29 @@ describe('LEVELS', () => {
     expect(new Set(LEVELS.map((l) => l.name)).size).toBe(10);
   });
   it('chaque obstacle a un type, dont la forme et les collisions sont les mêmes partout', () => {
+    const KIND = { wall: 'block', ramp: 'block', stairs: 'block', beam: 'block', pyramid: 'spike', pit: 'pit', pad: 'pad', mover: 'mover' };
     for (const { level } of LEVELS) for (const o of level.obstacles) {
-      if (o.type === 'pyramid') expect([o.kind, o.h]).toEqual(['spike', 1]);
-      else expect(o.kind).toBe('block');
+      expect(o.kind).toBe(KIND[o.type]);
       if (o.type === 'wall') expect(o.h).toBe(3);
       if (o.type === 'ramp') expect(o.h).toBe(2);
+      if (o.type === 'beam') expect([o.y, o.h]).toEqual([1.5, 1.5]);
     }
   });
-  it('les niveaux utilisent les 4 types d\'obstacles', () => {
+  const types = (i: number) => new Set(LEVELS[i].level.obstacles.map((o) => o.type));
+  it('les niveaux utilisent les 8 types d\'obstacles', () => {
     const used = new Set(LEVELS.flatMap(({ level }) => level.obstacles.map((o) => o.type)));
-    expect([...used].sort()).toEqual(['pyramid', 'ramp', 'stairs', 'wall']);
+    expect([...used].sort()).toEqual([...OBSTACLE_TYPES].sort());
+  });
+  it('les types arrivent peu à peu : chaque niveau de 2 à 5 en apporte un nouveau, le 5 les a tous', () => {
+    expect(types(0).size).toBeLessThanOrEqual(4);
+    for (let i = 1; i < 5; i++) {
+      const before = new Set(LEVELS.slice(0, i).flatMap(({ level }) => level.obstacles.map((o) => o.type)));
+      expect([...types(i)].filter((t) => !before.has(t)).length).toBeGreaterThan(0);
+    }
+    expect(types(4).size).toBe(OBSTACLE_TYPES.length);
+  });
+  it('les niveaux 6 à 10 mêlent tous les types', () => {
+    for (let i = 5; i < 10; i++) expect(types(i).size).toBe(OBSTACLE_TYPES.length);
   });
   it('le temps de réaction diminue strictement sur les niveaux 1 à 5', () => {
     const times = LEVELS.slice(0, 5).map((l) => reactionTime(l.level));
