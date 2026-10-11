@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseMap } from './level';
 import { CONFIG } from './game';
-import { challenges, reactionTime, reactionTarget } from './reaction';
+import { challenges, reactionGaps, reactionTime, reactionTarget } from './reaction';
 
 const lanes = (cols: Record<number, string>, width: number) =>
   Array.from({ length: 5 }, (_, l) => Array.from({ length: width }, (_, x) => (l === 2 ? cols[x] ?? '.' : '.')).join(''));
@@ -24,16 +24,18 @@ describe('reactionTime', () => {
   });
 });
 
+describe('reactionGaps', () => {
+  it('liste les temps libres entre défis consécutifs', () => {
+    const lvl = parseMap(lanes({ 5: '^', 26: '^', 80: '^' }, 90));
+    expect(reactionGaps(lvl).map((g) => g * CONFIG.speed)).toEqual([20, 53]);
+  });
+});
+
 describe('reactionTarget', () => {
   it('va de 10 s à 2,5 s sur les niveaux 1 à 5', () => {
     expect(reactionTarget(0)).toBe(10);
     expect(reactionTarget(2)).toBeCloseTo(6.25, 6);
     expect(reactionTarget(4)).toBe(2.5);
-  });
-  it('puis de 2,2 s à 1 s sur les niveaux 6 à 10', () => {
-    expect([5, 6, 7, 8, 9].map(reactionTarget).map((t) => +t.toFixed(6))).toEqual([2.2, 1.9, 1.6, 1.3, 1]);
-  });
-  it('décroît strictement', () => {
-    for (let i = 1; i < 10; i++) expect(reactionTarget(i)).toBeLessThan(reactionTarget(i - 1));
+    for (let i = 1; i < 5; i++) expect(reactionTarget(i)).toBeLessThan(reactionTarget(i - 1));
   });
 });

@@ -1,4 +1,6 @@
 import { LANES, parseMap, type Level } from './level';
+import { CONFIG } from './game';
+import { REACTION_CALM, REACTION_STRESS } from './reaction';
 import type { ThemeId } from '../render/themes';
 
 type Segment = string[]; // 5 lignes de même largeur : couloir gauche → droit, colonnes vers l'avant
@@ -74,6 +76,29 @@ const trim = (s: Segment): Segment => {
 const sequence = (gap: number, ...list: Segment[]): Level =>
   parseMap(join(empty(14), ...list.flatMap((c) => [empty(gap), trim(c)]), empty(14)));
 
+/** Défis des niveaux 6 à 10, pris dans l'ordre (en boucle) à partir d'un décalage propre à chaque niveau. */
+const POOL: readonly Segment[] = [
+  wall(0), wall(3), spikeLine, wall(1), stairs, wall(2), tunnel, wall(0), spikes3, wall(3), platform,
+  wall(1), spikeLine, wall(2), stairs, wall(3), tunnel, wall(0), platform,
+];
+
+/**
+ * Profil de temps libres (s) : `count` vagues, chacune avec `calm` écarts calmes de 2,5 s, une montée
+ * de tension (2 s puis 1,5 s) et `stress` écarts stressants de 1 s.
+ */
+const waves = (count: number, calm: number, stress: number): number[] =>
+  Array.from({ length: count }, () => [
+    ...Array<number>(calm).fill(REACTION_CALM), 2, 1.5, ...Array<number>(stress).fill(REACTION_STRESS),
+  ]).flat();
+
+/** Niveau dont les écarts entre défis suivent le profil `gaps` (s), arrondis à la colonne au-dessus. */
+const rhythm = (gaps: number[], offset: number): Level => {
+  const pick = (i: number) => trim(POOL[(offset + i) % POOL.length]);
+  const segs: Segment[] = [empty(14), pick(0)];
+  gaps.forEach((t, i) => segs.push(empty(Math.ceil(t * CONFIG.speed - 1e-9)), pick(i + 1)));
+  return parseMap(join(...segs, empty(14)));
+};
+
 /** `theme` : décor du niveau (cf. render/themes.ts), interchangeable sans toucher aux obstacles. */
 export interface LevelDef { name: string; theme: ThemeId; level: Level }
 
@@ -96,48 +121,12 @@ export const LEVELS: readonly LevelDef[] = [
       wall(2), tunnel, platform, wall(0), wall(3), stairs, spikeLine, wall(1), tunnel, wall(2),
     ),
   },
-  // Niveaux 6 à 10 : de 2,2 s à 1 s de temps de réaction, soit 16, 14, 12, 10 et 7 colonnes.
-  {
-    name: 'Sprint',
-    theme: 'neon',
-    level: sequence(
-      16, wall(2), wall(0), spikeLine, wall(3), stairs, wall(1), platform, wall(3), tunnel,
-      spikes3, wall(0), stairs, wall(2), spikeLine,
-    ),
-  },
-  {
-    name: 'Rafale',
-    theme: 'foret',
-    level: sequence(
-      14, wall(0), wall(3), spikeLine, wall(1), tunnel, wall(2), stairs, wall(0), platform, wall(3),
-      spikeLine, wall(1), tunnel, wall(2), stairs, wall(0),
-    ),
-  },
-  {
-    name: 'Tempête',
-    theme: 'dunes',
-    level: sequence(
-      12, wall(3), wall(0), wall(2), spikeLine, stairs, wall(1), tunnel, wall(3), platform, spikeLine,
-      wall(0), wall(2), stairs, wall(1), tunnel, wall(3), spikes3, wall(0),
-    ),
-  },
-  {
-    name: 'Vertige',
-    theme: 'glacier',
-    level: sequence(
-      10, wall(1), wall(3), wall(0), spikeLine, wall(2), stairs, wall(0), tunnel, wall(3), platform,
-      wall(1), spikeLine, wall(3), stairs, wall(0), tunnel, wall(2), spikeLine, wall(1), wall(3),
-    ),
-  },
-  {
-    name: 'Ultime',
-    theme: 'volcan',
-    level: sequence(
-      7, wall(0), wall(3), wall(1), spikeLine, wall(2), stairs, wall(0), tunnel, wall(3), platform,
-      wall(1), spikeLine, wall(3), wall(0), stairs, wall(2), tunnel, wall(0), spikeLine, wall(3),
-      platform, wall(1), wall(2),
-    ),
-  },
+  // Niveaux 6 à 10 : le rythme varie dans le niveau, par vagues (cf. `waves`).
+  { name: 'Sprint', theme: 'neon', level: rhythm(waves(3, 3, 2), 0) },
+  { name: 'Rafale', theme: 'foret', level: rhythm(waves(3, 3, 3), 3) },
+  { name: 'Tempête', theme: 'dunes', level: rhythm(waves(3, 2, 4), 6) },
+  { name: 'Vertige', theme: 'glacier', level: rhythm(waves(4, 2, 5), 1) },
+  { name: 'Ultime', theme: 'volcan', level: rhythm(waves(4, 1, 6), 4) },
 ];
 
 export const LEVEL_1 = LEVELS[0].level;
