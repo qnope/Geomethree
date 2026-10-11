@@ -139,6 +139,19 @@ export class GameScene {
     this.resize();
   }
 
+  /** Libère le contexte WebGL et les ressources GPU (changement de niveau). */
+  dispose(): void {
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+      else mat?.dispose();
+    });
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
+  }
+
   resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h, false);

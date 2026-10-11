@@ -1,31 +1,78 @@
+
 import { Game } from './game/game';
-import { LEVEL_1 } from './game/levels';
+import { LEVELS } from './game/levels';
 import { GameScene } from './render/scene';
 import { FrameStats } from './perf';
 import { Controls } from './input';
+import { loadProgress, saveProgress, recordRun, isUnlocked } from './progress';
 
-const canvas = document.createElement('canvas');
-document.body.prepend(canvas);
 const $ = (id: string) => document.getElementById(id)!;
 const fill = $('fill'), pct = $('pct'), att = $('att'), perf = $('perf'), msg = $('msg');
-const dot = $('dot'), btnL = $('bl'), btnR = $('br');
+const dot = $('dot'), btnL = $('bl'), btnR = $('br'), menu = $('menu'), levelList = $('levels'), menuBtn = $('menubtn');
 
-const game = new Game(LEVEL_1);
-const view = new GameScene(canvas, game);
+const storage = (() => { try { return window.localStorage; } catch { return null; } })();
+const progress = storage ? loadProgress(storage, LEVELS.length) : loadProgress({ getItem: () => null, setItem: () => {} }, LEVELS.length);
+const persist = () => { if (storage) saveProgress(storage, progress); };
+
+let canvas: HTMLCanvasElement;
+let game: Game;
+let view: GameScene;
+let current = 0;
 const stats = new FrameStats(120);
 const controls = new Controls();
 controls.attach();
 
 let started = false;
+let tiltAsked = false;
 let endT = 0;
 let startedAt = 0;
 
-function start() {
-  if (started) return;
+function loadLevel(i: number) {
+  current = i;
+  view?.dispose();
+  canvas?.remove();
+  canvas = document.createElement('canvas');
+  document.body.prepend(canvas);
+  game = new Game(LEVELS[i].level);
+  view = new GameScene(canvas, game);
+  endT = 0;
+  lastPct = -1;
+  msg.style.display = 'none';
+  att.textContent = `Niveau ${i + 1} · Essai 1`;
+}
+
+function renderMenu() {
+  levelList.replaceChildren();
+  LEVELS.forEach((l, i) => {
+    const b = document.createElement('button');
+    const best = Math.round(progress.best[i] * 100);
+    b.disabled = !isUnlocked(progress, i);
+    b.classList.toggle('done', best === 100);
+    b.innerHTML = `<span>${i + 1}. ${l.name}</span><small>${b.disabled ? '🔒' : best === 100 ? '✔ 100 %' : `meilleur ${best} %`}</small>`;
+    b.addEventListener('click', () => void play(i));
+    levelList.append(b);
+  });
+}
+
+function showMenu() {
+  started = false;
+  renderMenu();
+  menu.style.display = 'flex';
+}
+
+async function play(i: number) {
+  if (!isUnlocked(progress, i)) return;
+  if (!tiltAsked) { tiltAsked = true; await controls.requestTilt(); }
+  loadLevel(i);
+  menu.style.display = 'none';
   started = true;
   startedAt = performance.now();
-  msg.style.display = 'none';
 }
+
+const saveRun = () => { if (recordRun(progress, current, game.progress, game.status === 'won')) persist(); };
+menuBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+menuBtn.addEventListener('click', () => { if (started) saveRun(); showMenu(); });
+
 
 // Les boutons à l'écran (secours sans capteur) ne déclenchent pas de saut.
 for (const [el, side] of [[btnL, 'left'], [btnR, 'right']] as const) {
@@ -43,30 +90,32 @@ for (const [el, side] of [[btnL, 'left'], [btnR, 'right']] as const) {
 
 window.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  if (!started) return; // le premier toucher démarre au `click`, pour la permission iOS
-  if (game.status === 'won' && endT > 0.8) restart();
+  if (!started) return; // le menu gère ses propres boutons
+  if (game.status === 'won' && endT > 0.8) next();
   controls.pressJump(e.pointerId);
 }, { passive: false });
 window.addEventListener('pointerup', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('pointercancel', (e) => controls.releaseJump(e.pointerId));
-window.addEventListener('click', () => {
-  if (started) return;
-  void controls.requestTilt().then(start);
-});
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ') {
-    if (!started) start();
-    else if (game.status === 'won' && endT > 0.8) restart();
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ' || e.code === 'Enter') {
+    if (!started) void play(progress.unlocked);
+    else if (game.status === 'won' && endT > 0.8) next();
   }
 });
-window.addEventListener('resize', () => view.resize());
+window.addEventListener('resize', () => view?.resize());
 
 function restart() {
   game.restart();
   view.reset();
   endT = 0;
   msg.style.display = 'none';
-  att.textContent = `Essai ${game.attempts}`;
+  att.textContent = `Niveau ${current + 1} · Essai ${game.attempts}`;
+}
+
+/** Après une victoire : niveau suivant, ou menu après le dernier. */
+function next() {
+  if (current + 1 < LEVELS.length) void play(current + 1);
+  else showMenu();
 }
 
 let last = performance.now();
@@ -82,9 +131,11 @@ function frame(now: number) {
   if (started) {
     const before = game.status;
     game.update(dt, controls.jumpHeld, steer);
-    if (before === 'running' && game.status === 'dead') view.explode();
+    if (before === 'running' && game.status === 'dead') { view.explode(); saveRun(); }
     if (before === 'running' && game.status === 'won') {
-      msg.innerHTML = `Niveau terminé !<small>${game.attempts} essai(s) · touche l'écran pour rejouer</small>`;
+      saveRun();
+      const last = current + 1 >= LEVELS.length;
+      msg.innerHTML = `Niveau terminé !<small>${game.attempts} essai(s) · touche l'écran pour ${last ? 'revenir au menu' : 'le niveau suivant'}</small>`;
       msg.style.display = 'block';
     }
     if (game.status !== 'running') {
@@ -113,4 +164,6 @@ function frame(now: number) {
   }
   requestAnimationFrame(frame);
 }
+showMenu();
+loadLevel(progress.unlocked);
 requestAnimationFrame(frame);
