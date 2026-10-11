@@ -51,96 +51,47 @@ const tunnel = seg([
 ]);
 
 
-/** Escalier de blocs (hauteurs 1, 2, 3) sur toute la largeur, puis redescente : on monte en sautant. */
-const stairs = seg([
-  '..1.2.3.3.2.1.......',
-  '..1.2.3.3.2.1.......',
-  '..1.2.3.3.2.1.......',
-  '..1.2.3.3.2.1.......',
-  '..1.2.3.3.2.1.......',
-]);
+/** Escalier de blocs (hauteurs 1, 2, 3) sur toute la largeur : on monte en sautant, puis on redescend. */
+const stairs = seg(Array.from({ length: LANES }, () => '1.2.3.3.2.1'));
 
-// Slalom serré : murs rapprochés (une demi-seconde d'écart) avec des pics dans les passages.
-const tightSlalom = (gaps: number[]): Segment =>
-  join(...gaps.map((gap) => walls(8, [{ col: 3, gap }])));
+/** Ligne de pics sur toute la largeur : saut obligatoire. */
+const spikeLine = put(1, [0, 1, 2, 3, 4].map((lane) => ({ lane, col: 0, c: '^' })));
+const spike = put(1, [{ lane: 2, col: 0, c: '^' }]);
+const spikes3 = put(1, [1, 2, 3].map((lane) => ({ lane, col: 0, c: '^' })));
+const wall = (gap: number): Segment => walls(1, [{ col: 0, gap }]);
+
+/** Retire les colonnes vides en tête et en queue d'un segment. */
+const trim = (s: Segment): Segment => {
+  const empty = (x: number) => s.every((r) => r[x] === '.');
+  let a = 0, b = s[0].length;
+  while (a < b && empty(a)) a++;
+  while (b > a && empty(b - 1)) b--;
+  return s.map((r) => r.slice(a, b));
+};
+
+/** Enchaîne les défis en laissant exactement `gap` colonnes libres entre deux (donc gap / vitesse secondes). */
+const sequence = (gap: number, ...list: Segment[]): Level =>
+  parseMap(join(empty(14), ...list.flatMap((c) => [empty(gap), trim(c)]), empty(14)));
 
 export interface LevelDef { name: string; level: Level }
 
-const L1 = parseMap(
-  join(
-    empty(16),
-    put(14, [{ lane: 2, col: 5, c: '^' }]), // premier pic : on saute ou on contourne
-    put(14, [1, 2, 3].map((lane) => ({ lane, col: 5, c: '^' }))), // trois pics : saut ou contournement
-    walls(16, [{ col: 5, gap: 3 }]), // premier mur : il faut pencher à droite
-    walls(16, [{ col: 5, gap: 0 }]), // puis traverser jusqu'à gauche
-  ),
-);
-
-const L2 = parseMap(
-  join(
-    empty(14),
-    walls(28, [{ col: 4, gap: 2 }, { col: 12, gap: 0 }, { col: 20, gap: 3 }]), // slalom
-    platform, // monter sur le plateau
-    put(14, [0, 1, 2, 3, 4].map((lane) => ({ lane, col: 5, c: '^' }))), // ligne de pics : saut obligatoire
-    tightSlalom([2, 0, 3]),
-    stairs,
-  ),
-);
-
-// Le niveau du prototype : tout y est.
-const L3 = parseMap(
-  join(
-    empty(16),
-    put(14, [{ lane: 2, col: 5, c: '^' }]),
-    put(14, [1, 2, 3].map((lane) => ({ lane, col: 5, c: '^' }))),
-    walls(16, [{ col: 5, gap: 3 }]),
-    walls(16, [{ col: 5, gap: 0 }]),
-    walls(28, [{ col: 4, gap: 2 }, { col: 12, gap: 0 }, { col: 20, gap: 3 }]),
-    platform,
-    put(14, [0, 1, 2, 3, 4].map((lane) => ({ lane, col: 5, c: '^' }))),
-    tunnel,
-    walls(28, [{ col: 6, gap: 0 }, { col: 14, gap: 3 }, { col: 22, gap: 1 }]),
-  ),
-);
-
-const L4 = parseMap(
-  join(
-    empty(14),
-    stairs,
-    tightSlalom([1, 3, 0, 2]),
-    platform,
-    tunnel,
-    put(14, [0, 1, 2, 3, 4].map((lane) => ({ lane, col: 5, c: '^' }))),
-    stairs,
-    walls(28, [{ col: 4, gap: 3 }, { col: 12, gap: 0 }, { col: 20, gap: 2 }]),
-    tightSlalom([1, 3, 0, 2]),
-    platform,
-  ),
-);
-
-const L5 = parseMap(
-  join(
-    empty(14),
-    tightSlalom([0, 2, 3, 1, 3, 0]),
-    stairs,
-    tunnel,
-    platform,
-    tightSlalom([3, 1, 0, 2, 0, 3]),
-    put(14, [0, 1, 2, 3, 4].map((lane) => ({ lane, col: 5, c: '^' }))),
-    tunnel,
-    stairs,
-    tightSlalom([2, 0, 3, 1]),
-    platform,
-    walls(28, [{ col: 6, gap: 0 }, { col: 14, gap: 3 }, { col: 22, gap: 1 }]),
-  ),
-);
-
+// Le temps libre entre deux défis est le « temps de réaction » : 10 s au niveau 1, 2,5 s au dernier
+// (cf. reaction.ts). À 7 u/s : 70, 57, 44, 31 et 18 colonnes (arrondies au-dessus de la cible).
 export const LEVELS: readonly LevelDef[] = [
-  { name: 'Échauffement', level: L1 },
-  { name: 'Slalom', level: L2 },
-  { name: 'Prototype', level: L3 },
-  { name: 'Escalade', level: L4 },
-  { name: 'Marathon', level: L5 },
+  { name: 'Échauffement', level: sequence(70, spike, spikes3, wall(3), wall(0), spikeLine) },
+  { name: 'Slalom', level: sequence(57, wall(2), wall(0), platform, spikeLine, wall(3), spikes3) },
+  { name: 'Prototype', level: sequence(44, spike, wall(3), wall(0), wall(2), platform, spikeLine, tunnel, wall(1)) },
+  {
+    name: 'Escalade',
+    level: sequence(31, stairs, wall(1), wall(3), platform, tunnel, spikeLine, stairs, wall(0), wall(2), tunnel),
+  },
+  {
+    name: 'Marathon',
+    level: sequence(
+      18, wall(0), wall(3), wall(1), stairs, tunnel, platform, wall(3), wall(0), spikeLine, stairs,
+      wall(2), tunnel, platform, wall(0), wall(3), stairs, spikeLine, wall(1), tunnel, wall(2),
+    ),
+  },
 ];
 
-export const LEVEL_1 = L1;
+export const LEVEL_1 = LEVELS[0].level;
