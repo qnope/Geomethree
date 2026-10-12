@@ -50,6 +50,8 @@ export class Game {
   attempts = 1;
   /** Nombre de décollages depuis la création (le son du saut compare avant / après update). */
   jumps = 0;
+  /** En pause, `update` ne fait plus rien : la partie reprend exactement où elle s'était arrêtée. */
+  paused = false;
   private acc = 0;
   private cursor = 0; // premier obstacle encore potentiellement atteignable
   // Boîtes réutilisées : zéro allocation par pas de simulation.
@@ -78,15 +80,28 @@ export class Game {
     this.cursor = s.cursor;
   }
 
+  /** Met en pause une partie en cours (pas un cube mort ni un niveau gagné). Retourne true si c'est fait. */
+  pause(): boolean {
+    if (this.status !== 'running') return false;
+    this.paused = true;
+    return true;
+  }
+
+  resume(): void {
+    this.paused = false;
+  }
+
   restart(): void {
     Object.assign(this.player, { x: 0, y: 0, z: 0, vy: 0, grounded: true, prevX: 0, prevY: 0, prevZ: 0 });
     this.status = 'running';
+    this.paused = false;
     this.acc = 0;
     this.cursor = 0;
     this.attempts++;
   }
 
   update(frameDt: number, jumpHeld: boolean, steer = 0): void {
+    if (this.paused) return;
     this.acc += Math.min(frameDt, CONFIG.maxFrameDt);
     while (this.acc >= CONFIG.dt - 1e-9) {
       this.acc -= CONFIG.dt;

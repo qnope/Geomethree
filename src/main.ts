@@ -11,7 +11,8 @@ import { workerRenderer } from './audio/renderer';
 
 const $ = (id: string) => document.getElementById(id)!;
 const fill = $('fill'), pct = $('pct'), att = $('att'), perf = $('perf'), msg = $('msg');
-const dot = $('dot'), btnL = $('bl'), btnR = $('br'), menu = $('menu'), levelList = $('levels'), menuBtn = $('menubtn');
+const dot = $('dot'), btnL = $('bl'), btnR = $('br'), menu = $('menu'), levelList = $('levels');
+const pauseBtn = $('pausebtn'), pauseScreen = $('pause');
 const decorPick = $('decor') as HTMLSelectElement;
 const settings = $('settings'), optMusic = $('optmusic') as HTMLInputElement, optSfx = $('optsfx') as HTMLInputElement;
 
@@ -83,8 +84,32 @@ async function play(i: number) {
 }
 
 const saveRun = () => { if (recordRun(progress, current, game.progress, game.status === 'won')) persist(); };
-menuBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-menuBtn.addEventListener('click', () => { if (started) saveRun(); showMenu(); });
+
+/** Pause : simulation et ambiance figées, et plus aucune image calculée (la dernière reste à l'écran). */
+function pause() {
+  if (!started || game.paused || !game.pause()) return;
+  cancelAnimationFrame(raf);
+  sound.setPaused(true);
+  pauseScreen.style.display = 'flex';
+}
+
+function resume() {
+  if (!game.paused) return;
+  game.resume();
+  sound.setPaused(false);
+  pauseScreen.style.display = 'none';
+  last = performance.now(); // pas de saut dans le temps à la reprise
+  raf = requestAnimationFrame(frame);
+}
+
+/** En pause, on redessine l'image figée quand le canvas a pu être effacé (redimensionnement, retour au premier plan). */
+const redrawPaused = () => { if (game?.paused) view.render(0, clock); };
+
+// Au pointerdown pour réagir tout de suite ; le toucher ne doit pas faire sauter le cube.
+pauseBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); pause(); });
+$('resume').addEventListener('click', resume);
+$('again').addEventListener('click', () => { resume(); saveRun(); restart(); });
+$('quit').addEventListener('click', () => { resume(); saveRun(); showMenu(); });
 
 decorPick.append(new Option('celui du niveau', ''), ...THEMES.map((t) => new Option(t.name, t.id)));
 decorPick.value = forcedTheme ?? '';
@@ -100,7 +125,11 @@ decorPick.addEventListener('change', () => {
 for (const ev of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'] as const) {
   window.addEventListener(ev, () => sound.unlock(), { capture: true, passive: true });
 }
-document.addEventListener('visibilitychange', () => sound.setHidden(document.hidden));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pause(); // retour d'une notification ou d'une autre appli : la partie attend le joueur
+  else redrawPaused();
+  sound.setHidden(document.hidden);
+});
 
 // Menu Réglages (depuis le menu des niveaux) : ambiance et effets sonores, mémorisés.
 optMusic.checked = sound.music;
@@ -129,7 +158,7 @@ for (const [el, side] of [[btnL, 'left'], [btnR, 'right']] as const) {
 
 window.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  if (!started) return; // le menu gère ses propres boutons
+  if (!started || game.paused) return; // le menu et l'écran de pause gèrent leurs propres boutons
   if (game.status === 'won' && endT > 0.8) next();
   controls.pressJump(e.pointerId);
 }, { passive: false });
@@ -137,12 +166,13 @@ window.addEventListener('pointerup', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('pointercancel', (e) => controls.releaseJump(e.pointerId));
 window.addEventListener('keydown', (e) => {
   if (settingsOpen()) { if (e.code === 'Escape') showSettings(false); return; }
+  if (e.code === 'Escape' || e.code === 'KeyP') { if (game.paused) resume(); else pause(); return; }
   if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyZ' || e.code === 'Enter') {
     if (!started) void play(progress.unlocked);
     else if (game.status === 'won' && endT > 0.8) next();
   }
 });
-window.addEventListener('resize', () => view?.resize());
+window.addEventListener('resize', () => { view?.resize(); redrawPaused(); });
 
 function restart() {
   game.restart();
@@ -159,11 +189,14 @@ function next() {
 }
 
 let last = performance.now();
+let raf = 0;
+/** Temps du décor (particules) : il s'arrête pendant la pause. */
+let clock = 0;
 let lastPct = -1;
 let lastDot = 9;
 let perfTick = 0;
 function frame(now: number) {
-  const dt = Math.min((now - last) / 1000, 0.1);
+  const dt = Math.min(Math.max(now - last, 0) / 1000, 0.1); // horodatage de frame parfois antérieur à la reprise
   last = now;
 
   const cpu0 = performance.now();
@@ -185,7 +218,8 @@ function frame(now: number) {
       if (game.status === 'dead' && endT > 0.7) restart();
     }
   }
-  view.render(dt, now / 1000);
+  clock += dt;
+  view.render(dt, clock);
   const cpuMs = performance.now() - cpu0;
 
   stats.push(dt * 1000);
@@ -206,8 +240,8 @@ function frame(now: number) {
       `son ${!sound.music && !sound.effects ? 'coupé' : sound.renderMs ? `rendu en ${sound.renderMs.toFixed(0)} ms (worker)` : 'en préparation'}` +
       (sound.music || !sound.effects ? '' : ', ambiance coupée');
   }
-  requestAnimationFrame(frame);
+  raf = requestAnimationFrame(frame);
 }
 showMenu();
 loadLevel(progress.unlocked);
-requestAnimationFrame(frame);
+raf = requestAnimationFrame(frame);

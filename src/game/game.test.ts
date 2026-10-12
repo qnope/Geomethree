@@ -136,6 +136,58 @@ describe('Game', () => {
   });
 });
 
+describe('Game, pause', () => {
+  it('en pause, update ne fait plus rien : ni avance, ni saut, ni temps accumulé', () => {
+    const g = new Game(flat);
+    g.update(0.5, false);
+    g.update(CONFIG.dt / 2, false);
+    const x = g.player.x, alpha = g.alpha;
+    expect(g.pause()).toBe(true);
+    expect(g.paused).toBe(true);
+    for (let i = 0; i < 60; i++) g.update(1 / 60, true, 1);
+    expect(g.player.x).toBe(x);
+    expect(g.player.y).toBe(0);
+    expect(g.player.z).toBe(0);
+    expect(g.jumps).toBe(0);
+    expect(g.alpha).toBe(alpha); // l'image interpolée reste figée
+  });
+
+  it('reprend exactement là où elle s\'était arrêtée', () => {
+    const a = new Game(flat), b = new Game(flat);
+    a.update(0.5, false);
+    a.pause();
+    a.update(0.1, false);
+    a.resume();
+    expect(a.paused).toBe(false);
+    a.update(0.5, false);
+    b.update(0.5, false);
+    b.update(0.5, false);
+    expect(a.player.x).toBe(b.player.x);
+  });
+
+  it('on ne met en pause qu\'une partie en cours (pas un cube mort ni un niveau gagné)', () => {
+    const dead = new Game(parseLevel(['  ^     ']));
+    run(dead, 1);
+    expect(dead.status).toBe('dead');
+    expect(dead.pause()).toBe(false);
+    expect(dead.paused).toBe(false);
+    const won = new Game(parseLevel(['    ']));
+    run(won, 1);
+    expect(won.status).toBe('won');
+    expect(won.pause()).toBe(false);
+  });
+
+  it('recommencer sort de la pause', () => {
+    const g = new Game(flat);
+    g.update(0.5, false);
+    g.pause();
+    g.restart();
+    expect(g.paused).toBe(false);
+    g.update(0.5, false);
+    expect(g.player.x).toBeGreaterThan(0);
+  });
+});
+
 describe('Game snapshot', () => {
   it('restore revient exactement à l\'état sauvegardé', () => {
     const g = new Game(parseLevel(['        ^                ']));
