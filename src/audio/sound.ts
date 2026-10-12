@@ -40,7 +40,7 @@ function loadSettings(storage: StorageLike | null | undefined): SoundSettings {
 /**
  * Son du jeu : une boucle d'ambiance par décor (fondu enchaîné au changement) et trois effets.
  * Rien n'est créé avant le premier geste. Ambiance coupée : on ne calcule même pas sa boucle.
- * Tout coupé ou onglet masqué : le contexte est suspendu, plus aucun calcul audio.
+ * Tout coupé, partie en pause ou onglet masqué : le contexte est suspendu, plus aucun calcul audio.
  */
 export class Sound {
   /** Durée du dernier rendu (ms), pour l'affichage des performances. */
@@ -50,6 +50,7 @@ export class Sound {
   private master: GainNode | null = null;
   private broken = false;
   private hidden = false;
+  private paused = false;
   private theme: ThemeId | null = null;
   private playing: { theme: ThemeId; src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private readonly cache = new Map<ThemeId, Entry>();
@@ -62,6 +63,8 @@ export class Sound {
   get music(): boolean { return this.settings.music; }
   get effects(): boolean { return this.settings.effects; }
   private get active(): boolean { return this.settings.music || this.settings.effects; }
+  /** Onglet masqué ou partie en pause : le contexte reste suspendu, même si on touche l'écran. */
+  private get held(): boolean { return this.hidden || this.paused; }
 
   /** Décor courant : lance son rendu tout de suite (même avant le premier geste) et l'ambiance dès que possible. */
   setTheme(id: ThemeId): void {
@@ -89,7 +92,7 @@ export class Sound {
       blank.connect(this.master);
       blank.start();
     }
-    if (this.ctx.state !== 'running' && !this.hidden) this.ctx.resume().catch(() => {});
+    if (this.ctx.state !== 'running' && !this.held) this.ctx.resume().catch(() => {});
     this.startLoop();
   }
 
@@ -133,7 +136,23 @@ export class Sound {
     this.hidden = hidden;
     if (!this.ctx) return;
     if (hidden) this.ctx.suspend().catch(() => {});
-    else if (this.active) this.ctx.resume().catch(() => {});
+    else if (this.active && !this.paused) this.ctx.resume().catch(() => {});
+  }
+
+  /**
+   * Partie en pause : fondu court puis contexte suspendu, l'ambiance se fige là où elle en est.
+   * La reprise vient d'un geste (bouton Reprendre, touche) : iOS accepte d'y relancer le contexte.
+   */
+  setPaused(paused: boolean): void {
+    if (paused === this.paused) return;
+    this.paused = paused;
+    const ctx = this.ctx, master = this.master;
+    if (!ctx || !master || !this.active) return;
+    clearTimeout(this.suspendTimer);
+    master.gain.cancelScheduledValues(ctx.currentTime);
+    master.gain.setTargetAtTime(paused ? 0 : 1, ctx.currentTime, 0.03);
+    if (paused) this.suspendTimer = setTimeout(() => { if (this.paused) ctx.suspend().catch(() => {}); }, 200);
+    else if (!this.hidden) ctx.resume().catch(() => {});
   }
 
   /** Lance le rendu du décor si rien d'utilisable n'est en mémoire (sans la boucle si l'ambiance est coupée). */

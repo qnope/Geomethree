@@ -230,6 +230,62 @@ describe('Sound', () => {
     expect(ctx().resume).toHaveBeenCalledTimes(2);
   });
 
+  it('pause : fondu court puis contexte suspendu, l\'ambiance se fige sans s\'arrêter', async () => {
+    vi.useFakeTimers();
+    const { sound, ctx } = setup();
+    sound.setTheme('neon');
+    await vi.runAllTimersAsync();
+    sound.unlock();
+    const loop = ctx().sources.find((s) => s.loop)!;
+    sound.setPaused(true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(ctx().state).toBe('suspended');
+    expect(loop.stopped).toBeNull(); // la boucle n'est pas arrêtée : elle reprendra où elle en était
+  });
+
+  it('pause : un toucher sur l\'écran de pause ne relance pas le son, Reprendre si', async () => {
+    vi.useFakeTimers();
+    const { sound, ctx, played } = setup();
+    sound.setTheme('neon');
+    await vi.runAllTimersAsync();
+    sound.unlock();
+    sound.setPaused(true);
+    await vi.advanceTimersByTimeAsync(500);
+    sound.unlock();
+    expect(ctx().state).toBe('suspended');
+    sound.setPaused(false);
+    expect(ctx().state).toBe('running');
+    expect(played()).toEqual([1]); // la même boucle continue, aucune nouvelle source
+  });
+
+  it('pause puis onglet masqué et revenu : le son reste figé jusqu\'à la reprise', async () => {
+    vi.useFakeTimers();
+    const { sound, ctx } = setup();
+    sound.setTheme('neon');
+    await vi.runAllTimersAsync();
+    sound.unlock();
+    sound.setPaused(true);
+    sound.setHidden(true);
+    sound.setHidden(false);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(ctx().state).toBe('suspended');
+    sound.setPaused(false);
+    expect(ctx().state).toBe('running');
+  });
+
+  it('reprise juste après la pause (avant la fin du fondu) : le contexte n\'est pas suspendu', async () => {
+    vi.useFakeTimers();
+    const { sound, ctx } = setup();
+    sound.setTheme('neon');
+    await vi.runAllTimersAsync();
+    sound.unlock();
+    sound.setPaused(true);
+    sound.setPaused(false);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(ctx().suspend).not.toHaveBeenCalled();
+    expect(ctx().state).toBe('running');
+  });
+
   it('sans Web Audio (vieux navigateur) : le jeu continue en silence', () => {
     const sound = new Sound({ createContext: () => { throw new Error('pas de Web Audio'); }, render: async (id, withLoop) => fakeRender(id, withLoop) });
     sound.setTheme('neon');

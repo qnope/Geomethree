@@ -13,6 +13,9 @@ rendu dans `src/render/scene.ts` (InstancedMesh, 12 à 19 draw calls avec le dé
 
 - **Téléphone** : incline à gauche / à droite pour changer de couloir (piste de 5 couloirs), touche l'écran pour sauter. Sur iOS, la permission du capteur est demandée au premier toucher.
 - **Sans capteur** (ordinateur, capteur refusé) : flèches ← → (ou Q/D), Espace pour sauter ; sur écran tactile, deux boutons ◀ ▶ apparaissent.
+- **Pause** : bouton en haut à droite (ou Échap / P). La partie, l'ambiance et le rendu se figent : plus aucune image
+  n'est calculée. L'écran de pause propose Reprendre, Recommencer et Niveaux. Le jeu se met aussi en pause quand
+  l'appli passe en arrière-plan.
 - Le capteur d'inclinaison exige une page servie en HTTPS qui n'est pas dans une iframe restreinte.
 
 ## Niveaux
